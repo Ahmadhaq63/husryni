@@ -19,7 +19,8 @@ interface Props {
   invalid?: boolean;
   onChange: (value: string) => void;
   /** A suggestion was picked: set the address and postcode fields. */
-  onPick: (pick: { address: string; postcode: string }) => void;
+  /** heinum: the address register's id, when a complete address (not just a street) was picked. */
+  onPick: (pick: { address: string; postcode: string; heinum: number | null }) => void;
 }
 
 const DEBOUNCE_MS = 120;
@@ -126,7 +127,7 @@ export default function AddressAutocomplete({ id, lang, value, invalid, onChange
     if (s.kind === "street") {
       const text = `${s.street} `;
       picked.current = { street: s.street, postcode: s.postcode };
-      onPick({ address: text, postcode: s.postcode });
+      onPick({ address: text, postcode: s.postcode, heinum: null });
       suggest(text);
       requestAnimationFrame(() => {
         const el = inputRef.current;
@@ -136,7 +137,7 @@ export default function AddressAutocomplete({ id, lang, value, invalid, onChange
       return;
     }
     picked.current = null;
-    onPick({ address: s.label, postcode: s.postcode });
+    onPick({ address: s.label, postcode: s.postcode, heinum: s.heinum });
     setItems([]);
     setHint(null);
     setStatus("");

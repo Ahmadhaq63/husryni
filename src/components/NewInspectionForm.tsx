@@ -45,6 +45,8 @@ export default function NewInspectionForm({ lang, initialTier }: { lang: Lang; i
   const [error, setError] = useState<string | null>(null);
   const [badFields, setBadFields] = useState<string[]>([]);
 
+  // The register id of the picked address; typing over the address afterwards forgets it.
+  const [heinum, setHeinum] = useState<number | null>(null);
   const [form, setForm] = useState({
     address: "",
     postalCode: "",
@@ -84,6 +86,7 @@ export default function NewInspectionForm({ lang, initialTier }: { lang: Lang; i
           ...form,
           price: undefined,
           fastanumer: form.fastanumer || null,
+          heinum,
           priceIsk: form.price.replace(/\D/g, "") ? Number(form.price.replace(/\D/g, "")) : null,
         }),
       });
@@ -135,8 +138,14 @@ export default function NewInspectionForm({ lang, initialTier }: { lang: Lang; i
                   lang={lang}
                   value={form.address}
                   invalid={badFields.includes("address")}
-                  onChange={(v) => set("address", v)}
-                  onPick={({ address, postcode }) => setForm((f) => ({ ...f, address, postalCode: postcode }))}
+                  onChange={(v) => {
+                    set("address", v);
+                    setHeinum(null);
+                  }}
+                  onPick={({ address, postcode, heinum: picked }) => {
+                    setForm((f) => ({ ...f, address, postalCode: postcode }));
+                    setHeinum(picked);
+                  }}
                 />
               </div>
               <div className="col-md-4">
