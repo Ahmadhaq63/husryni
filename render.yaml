@@ -12,7 +12,9 @@ services:
     region: frankfurt
     # Address suggestions need the official register from HMS; deploy without them if HMS is unreachable.
     buildCommand: 'npm ci && (npm run addresses || echo "Address suggestions skipped") && npm run build'
-    startCommand: npm start
+    # Listen on IPv4 0.0.0.0: without -H, Next.js opens an IPv6-only socket that Render's port check misses.
+    # The port comes from Render's PORT variable.
+    startCommand: npx next start -H 0.0.0.0
     envVars:
       - key: NODE_VERSION
         value: "22"
