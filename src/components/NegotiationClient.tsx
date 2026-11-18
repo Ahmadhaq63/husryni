@@ -8,7 +8,7 @@ import { formatIskStable as formatIsk } from "./report/format";
 import { Chip, type ChipTone } from "./report/ui";
 import { GRADE_COLOR } from "@/lib/gradeColors";
 import { getDict, type Dict } from "@/lib/i18n";
-import { LEGAL_REFERENCE, type NegotiationTotals } from "@/lib/negotiation";
+import { LEGAL_REFERENCE, OFFER_RISK_BUFFER, type NegotiationTotals, type OfferGuide } from "@/lib/negotiation";
 import { ACTION_LABEL } from "@/lib/negotiationLabels";
 import type { Grade, Lang, Remedy, RemedyAction } from "@/lib/types";
 
@@ -35,9 +35,13 @@ interface Props {
   settings: { ownerSharePct: number | null; responseDeadline: string | null; note: string };
   totals: NegotiationTotals;
   priceIsk: number | null;
+  /** Buyers with a price only: a suggested offer from the choices above. */
+  offer: OfferGuide | null;
 }
 
-const pct = (part: number, whole: number | null) => (whole ? `${((part / whole) * 100).toFixed(1)} %` : null);
+/** One decimal, with a decimal comma in Icelandic (by hand, so server and browser render the same). */
+const pctNum = (n: number, lang: Lang) => `${n.toFixed(1).replace(".", lang === "is" ? "," : ".")} %`;
+const pct = (part: number, whole: number | null, lang: Lang) => (whole ? pctNum((part / whole) * 100, lang) : null);
 
 async function errorText(res: Response, lang: Lang, fallback: string) {
   try {
@@ -57,7 +61,7 @@ const ACTION_ICON: Record<RemedyAction, string> = {
 };
 
 export default function NegotiationClient(props: Props) {
-  const { inspectionId, lang, items, hasAssociation, shareToken, settings, totals, priceIsk } = props;
+  const { inspectionId, lang, items, hasAssociation, shareToken, settings, totals, priceIsk, offer } = props;
   const t = getDict(lang);
   const router = useRouter();
   const [, startRefresh] = useTransition();
@@ -179,7 +183,7 @@ export default function NegotiationClient(props: Props) {
                         {formatIsk(value, lang)}
                         {priceIsk && (
                           <div className="rp-totals__pct">
-                            {pct(value, priceIsk)} {t.ofPrice}
+                            {pct(value, priceIsk, lang)} {t.ofPrice}
                           </div>
                         )}
                       </td>
@@ -187,6 +191,44 @@ export default function NegotiationClient(props: Props) {
                   ))}
                 </tbody>
               </table>
+              {offer && (
+                <div className="offer-guide" aria-labelledby="offer-title">
+                  <h3 id="offer-title" className="offer-guide__title">
+                    <i className="bi bi-signpost-2" aria-hidden />
+                    {t.offerTitle}
+                  </h3>
+                  <dl className="offer-guide__rows">
+                    <div>
+                      <dt>{t.offerAsking}</dt>
+                      <dd>{formatIsk(offer.asking, lang)}</dd>
+                    </div>
+                    {offer.reductions > 0 && (
+                      <div>
+                        <dt>{t.offerReductions}</dt>
+                        <dd>− {formatIsk(offer.reductions, lang)}</dd>
+                      </div>
+                    )}
+                    {offer.hoaShare > 0 && (
+                      <div>
+                        <dt>{t.offerHoa}</dt>
+                        <dd>− {formatIsk(offer.hoaShare, lang)}</dd>
+                      </div>
+                    )}
+                    {offer.buffer > 0 && (
+                      <div>
+                        <dt>{t.offerBuffer.replace("{p}", String(Math.round(OFFER_RISK_BUFFER * 100)))}</dt>
+                        <dd>− {formatIsk(offer.buffer, lang)}</dd>
+                      </div>
+                    )}
+                    <div className="is-total">
+                      <dt>{t.offerSuggested}</dt>
+                      <dd>{formatIsk(offer.offer, lang)}</dd>
+                    </div>
+                  </dl>
+                  {offer.belowPct > 0 && <p className="offer-guide__below">{t.offerBelow.replace("{p}", pctNum(offer.belowPct, lang))}</p>}
+                  <p className="offer-guide__note">{t.offerNote}</p>
+                </div>
+              )}
               <details className="rp-details">
                 <summary>{t.legalTitle}</summary>
                 <p className="mt-2 mb-1">{LEGAL_REFERENCE.proposal2pct[lang]}</p>

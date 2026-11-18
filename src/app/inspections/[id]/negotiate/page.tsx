@@ -6,6 +6,7 @@ import { formatIsk, getCost } from "@/lib/costs";
 import { getDict } from "@/lib/i18n";
 import {
   computeTotals,
+  offerGuide,
   estimateIsk,
   hasOwnersAssociation,
   likelyCommonProperty,
@@ -25,7 +26,7 @@ export default async function NegotiatePage({ params }: { params: Promise<{ id: 
   const t = getDict(lang);
   const { inspection } = bundle;
 
-  if (!negotiationOpen(inspection.status)) {
+  if (!negotiationOpen(inspection.status, inspection.kind)) {
     return (
       <div className="rp-page">
         <div className="container rp-wrap rp-wrap--narrow">
@@ -68,6 +69,7 @@ export default async function NegotiatePage({ params }: { params: Promise<{ id: 
     };
   });
 
+  const totals = computeTotals(findings, remedies, negotiation.ownerSharePct);
   return (
     <div className="rp-page">
       <div className="container rp-wrap rp-wrap--wide">
@@ -98,8 +100,9 @@ export default async function NegotiatePage({ params }: { params: Promise<{ id: 
             hasAssociation={hasOwnersAssociation(inspection.propertyType)}
             shareToken={negotiation.shareToken}
             settings={{ ownerSharePct: negotiation.ownerSharePct, responseDeadline: negotiation.responseDeadline, note: negotiation.note }}
-            totals={computeTotals(findings, remedies, negotiation.ownerSharePct)}
+            totals={totals}
             priceIsk={inspection.priceIsk}
+            offer={inspection.purpose === "buyer" && inspection.priceIsk ? offerGuide(inspection.priceIsk, findings, remedies, totals, negotiation.ownerSharePct) : null}
           />
         )}
       </div>
