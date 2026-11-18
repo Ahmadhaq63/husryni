@@ -26,6 +26,16 @@ npm run dev                                         # http://localhost:3000
 
 Requires Node.js 22.12+.
 
+### Test deployment on Render
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/Ahmadhaq63/husryni)
+
+[render.yaml](render.yaml) sets up one free web service in Frankfurt. Render asks for `ANTHROPIC_API_KEY` and `INSPECTOR_PASSCODE` and generates `SESSION_SECRET` itself.
+
+- **Data is temporary.** The free plan has no permanent disk, so inspections and photos are wiped whenever the service restarts, redeploys or sleeps (after 15 minutes without visitors). The first visit after a pause takes 30–60 seconds.
+- **For real use,** switch to `plan: starter` and add a disk at `/var/data` with `DATA_DIR=/var/data`; [render.yaml](render.yaml) has the details.
+- **Anyone with the link can use the app** and spend API credit on your key, so share it only with your team.
+
 ## The flow
 
 | Status | Who | What happens |
