@@ -5,6 +5,7 @@ Húsrýni ("house review") produces condition reports (*ástandsskýrslur*) for 
 1. **Guided capture.** The seller, buyer or owner follows a checklist on their phone. The checklist depends on the property's type, build year, construction and heating.
 2. **AI pre-screening.** Claude looks at the photos for each checklist item and gives a condition grade from TG0 to TG3 (or TGIU, "not assessed"). It asks for a retake when a photo is too poor and flags personal data. It also names the specialist check needed, such as a moisture reading, mould sample or sewer camera.
 3. **Inspector sign-off.** For the *verified* tier, an inspector confirms, edits or rejects every AI finding and signs the report. AI suggests and the inspector decides: the app won't let anyone sign until every AI finding has been reviewed.
+4. **After the report.** The buyer negotiates repairs and price, the owner keeps a property history with a yearly check, shares read-only access with an insurer or bank, drafts repair quotes, and can ask questions about the report.
 
 The pattern is the same one Nestic uses for move-out cleaning: guided photo capture, AI judgement, and a human with the final say. Here it is applied to pre-sale and pre-purchase home inspections. See [docs/business-plan.md](docs/business-plan.md) for the market and the business model.
 
@@ -43,13 +44,45 @@ Requires Node.js 22.12+.
 | `capturing` | Seller / buyer / owner | Uploads photos per item, runs the AI check, fixes retake requests, or marks an item "not accessible" |
 | `in_review` | Inspector | *Verified tier:* reviews every AI finding (confirm / edit / reject), adds their own, and signs |
 | `ai_report` | — | *Basic tier:* report published straight away and clearly labelled as an unverified AI draft |
-| `verified` | — | Signed report with the inspector's name, licence number and statement; locked |
+| `verified` | — | Signed report with the inspector's name, licence number, statement and independence declaration; locked and sealed (see [The report standard](#the-report-standard)) |
 
 The inspection link (`/inspections/<random id>`) is the owner's access key, in the same way as Nestic's magic links. Photos are served by random id.
 
 **Trust signals:**
 - Live camera capture is the default, and photos picked from the device library are flagged on the inspector's review screen. Buyers distrusting seller-supplied information is what sank the UK's Home Information Packs (see the business plan).
 - An optional price field lets the report show repair costs as a percentage of the price.
+
+## The report standard
+
+Every report follows the same rules ([src/lib/standard.ts](src/lib/standard.ts)), and a signed report records which version of them it follows (`Húsrýni standard 1.0`):
+
+- **Overall grade by a published rule**, never typed in: TG3 if any item needs immediate action or two or more items are TG3; TG2 if one item is TG3 or three or more are TG2; TG1 if there are other deviations; otherwise TG0. Each item counts once, by its worst finding. Items not assessed don't count but are listed. The report shows the rule and which items decided the grade, and a signed report keeps the grade it was signed with.
+- **Cause and consequence on every TG2/TG3 finding.** Claude drafts both (a hidden cause is written as a possibility); the inspector can't sign until every TG2/TG3 finding has them.
+- **"Not assessed" needs a reason.** Marking an item not accessible asks why (quick picks or free text); the report lists the reasons.
+- **Moisture readings as data.** The inspector records readings from site (room, building part, WME %, meter type) on the review screen; the report shows them with a dry / at-risk / wet level. The limits (17 and 20 %) are provisional.
+- **Ten building systems.** Every checklist item belongs to one of ten systems (roof, exterior walls, windows and doors, water supply, drains, heating and ventilation, electrical, wet rooms, interior, grounds/common property), shown as traffic lights, so reports compare across properties. Water-damage systems are marked.
+- **Independence.** At signing the inspector confirms a declaration of interests (no stake in the sale, fixed fee whatever the result); the fee is printed on the report.
+- **Seal.** At signing the server computes a SHA-256 fingerprint over the whole report, every photo's bytes included ([src/lib/seal.ts](src/lib/seal.ts)). The report prints the first 16 hex digits; anyone can check a copy at `/verify`, which recomputes the fingerprint from what is stored and says whether the report is unchanged. Photos added later for other purposes (the seller's repair photos) are outside the seal.
+- **AI–inspector agreement.** The AI's original grade is kept when the inspector edits a finding. The inspector console shows, over signed reports, the share of items where the AI and the inspector gave the same or an adjacent grade (target 80 %), the same measure used for double inspections.
+
+## Property history and the yearly check
+
+Once a report is final, the owner can open **Ástandssaga** (`/inspections/<id>/history`):
+
+- **Yearly owner check** (`/inspections/<check id>/annual`, about 10 minutes). First every open TG1–TG3 item from earlier reports: fixed / unchanged / worse, with a note and a new photo. Claude compares the report's photos with the new ones (fixed, partly fixed, unchanged, worse, can't tell) and flags answers the photos contradict. Then ten plain-language questions (damp, leaks, drains, radiators, windows, doors, electrics, smoke alarm, cracks, rain leaks); each "problem" answer becomes a new finding on the history.
+- **What stays open** carries over to the next check: an item closes when the owner says fixed, unless the photos disagree.
+- **Next check due** a year after the condition was last confirmed (the report, or the last completed check).
+- **Same property.** Orders store the address register's id (HEINUM) when the address is picked from the list, next to the fastanúmer. Inspectors see earlier reports of the same property on the review screen. Owners only ever see their own reports.
+
+## Owner tools
+
+On a final report (owner's link only):
+
+- **Read-only links** (`/r/<token>`) for an insurer, a bank or a buyer. The recipient sees the report, photos and seal, but not the owner's link, contact details or negotiation; the owner sees how often each link was opened and can revoke it.
+- **Repair quote drafts** (`/inspections/<id>/quotes`): chosen findings become one draft per trade (plumber, electrician, carpenter …), with labour hours and materials estimated from the cost range and an hourly rate, plus VAT (24 %). The owner edits the lines, marks the quote sent and approves it, which locks it. Rates are placeholders ([src/lib/ownerTools.ts](src/lib/ownerTools.ts)).
+- **Offer guide** for buyers who entered a price: asking price minus the price reductions they ask for, their share of common-property repairs and a 20 % risk buffer on TG3 repairs the seller won't fix, rounded down. An aid, not a valuation.
+- **Report a problem** between checks: the owner describes it and gets which trade to call, how soon, and what to do right now (for example shut off the water). It is logged on the property history.
+- **Ask** (bottom right on the report and history): questions about the property, answered by Claude from the report and its history only, in Icelandic or English, typed or spoken where the browser supports Icelandic speech. Capped at 40 questions per report per day. Demo mode answers by simple rules.
 
 ## Remedies & negotiation
 
@@ -100,6 +133,10 @@ src/
     inspections/new       order form
     inspections/[id]      guided capture (owner)
     inspections/[id]/report   the report (print → PDF)
+    inspections/[id]/history  property history; /annual the yearly owner check
+    inspections/[id]/quotes   repair quote drafts
+    r/[token]             read-only report through an owner's link
+    verify/               check a signed report's fingerprint
     inspector/            queue, review & sign
     api/                  JSON endpoints (create, upload, analyse, submit, inspector actions)
   components/             UI (Bootstrap 5)
@@ -108,13 +145,17 @@ src/
     labels.ts             grade scale (TG0–TG3, TGIU) and other labels, IS/EN
     costs.ts              repair cost catalogue (placeholder figures!)
     report.ts             report aggregation, submit readiness
+    standard.ts           the report standard: overall-grade rule, systems, moisture scale, agreement
+    seal.ts               SHA-256 seal of a signed report and its check
+    annual.ts / annualRepo.ts   yearly owner check and property history
+    ownerTools.ts / ownerRepo.ts read-only links, repair quotes, problem triage
     repo.ts / db.ts       SQLite (better-sqlite3) data access + migrations
     storage.ts            local photo storage + file-type sniffing
     addressIndex.ts       address register: index builder + search (shared with the script)
     postcodes.ts          postcode → town, address formatting
-    ai/                   prompt, schema, Claude client, demo analyser
+    ai/                   prompts, schemas, Claude client, demo analyser, assistant context
 scripts/build-addresses.ts  downloads the address register and builds data/addresses.db
-tests/                    Vitest: checklist, AI mapping, addresses, full flow on a temp DB
+tests/                    Vitest: checklist, AI mapping, addresses, standard, seal, yearly check, owner tools, full flow on a temp DB
 docs/business-plan.md     research, competitors, pricing, go-to-market
 ```
 
@@ -133,7 +174,8 @@ These are deliberate prototype shortcuts:
 
 - **Logins.** Inspectors share one passcode. Replace it with real accounts, for example Icelandic electronic ID via Auðkenni or island.is, and email magic links for owners.
 - **Storage.** SQLite and local disk work for one server. For production, move to Postgres and EU-hosted object storage, with a data-retention policy.
-- **Repair costs.** `src/lib/costs.ts` holds rough placeholder ranges. Replace them with contractor-sourced prices and set `COST_TABLE_VERIFIED = true`.
+- **Repair costs.** `src/lib/costs.ts` holds rough placeholder ranges. Replace them with contractor-sourced prices and set `COST_TABLE_VERIFIED = true`. The same goes for the hourly rates in `src/lib/ownerTools.ts` and the offer guide's 20 % buffer.
+- **Standard values to confirm with inspectors.** The moisture limits (17 / 20 % WME) and the overall-grade rule in `src/lib/standard.ts`. The seal is tamper evidence, not a qualified electronic signature.
 - **Legal.**
   - Terms and liability wording reviewed by an Icelandic lawyer.
   - A data processing agreement (DPA) and a GDPR data-protection impact assessment (DPIA) covering AI processing of photos.
