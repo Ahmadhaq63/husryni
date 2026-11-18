@@ -1,0 +1,106 @@
+:root {
+  --bs-primary: #0f5c4d;
+  --bs-primary-rgb: 15, 92, 77;
+  --bs-link-color: #0f5c4d;
+  --bs-link-color-rgb: 15, 92, 77;
+}
+
+.btn-primary {
+  --bs-btn-bg: #0f5c4d;
+  --bs-btn-border-color: #0f5c4d;
+  --bs-btn-hover-bg: #0b473b;
+  --bs-btn-hover-border-color: #0b473b;
+  --bs-btn-active-bg: #0b473b;
+  --bs-btn-disabled-bg: #0f5c4d;
+  --bs-btn-disabled-border-color: #0f5c4d;
+}
+
+.btn-outline-primary {
+  --bs-btn-color: #0f5c4d;
+  --bs-btn-border-color: #0f5c4d;
+  --bs-btn-hover-bg: #0f5c4d;
+  --bs-btn-hover-border-color: #0f5c4d;
+  --bs-btn-active-bg: #0f5c4d;
+}
+
+.text-primary {
+  color: #0f5c4d !important;
+}
+
+.hero {
+  background: linear-gradient(135deg, #eef6f3 0%, #ffffff 60%);
+}
+
+.step-icon {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #e3f0ec;
+  color: #0f5c4d;
+  font-size: 1.4rem;
+}
+
+.thumb {
+  width: 96px;
+  height: 96px;
+  object-fit: cover;
+  border-radius: 0.5rem;
+  border: 1px solid var(--bs-border-color);
+}
+
+.thumb-lg {
+  width: 180px;
+  height: 135px;
+  object-fit: cover;
+  border-radius: 0.5rem;
+  border: 1px solid var(--bs-border-color);
+}
+
+.photo-wrap {
+  position: relative;
+  display: inline-block;
+}
+
+.photo-wrap .photo-del {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  padding: 0 0.35rem;
+  line-height: 1.4;
+}
+
+.photo-num {
+  position: absolute;
+  bottom: 4px;
+  left: 4px;
+  font-size: 0.7rem;
+}
+
+.finding {
+  border-left: 4px solid var(--bs-border-color);
+  padding-left: 0.75rem;
+}
+.finding-TG0 { border-left-color: var(--grade-0); }
+.finding-TG1 { border-left-color: var(--grade-1); }
+.finding-TG2 { border-left-color: var(--grade-2); }
+.finding-TG3 { border-left-color: var(--grade-3); }
+.finding-TGIU { border-left-color: var(--grade-iu); }
+.finding-rejected { opacity: 0.5; }
+
+.sticky-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  background: rgba(255, 255, 255, 0.96);
+  border-top: 1px solid var(--bs-border-color);
+}
+
+@media print {
+  .no-print { display: none !important; }
+  body { font-size: 11pt; }
+  .card { break-inside: avoid; }
+  a[href]::after { content: none !important; }
+}

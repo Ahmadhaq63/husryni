@@ -1,0 +1,167 @@
+/*
+ * Design foundation shared by every page: tokens, type, and the Bootstrap bridge.
+ * Page styles live in their own files: shell.css (site chrome, landing, order form, capture),
+ * report.css (report, inspector, negotiation, seller pages), three.css (3D scenes).
+ */
+:root {
+  --font-sans: var(--font-inter), system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  /* Neutrals */
+  --ink: #0d2621; /* headings */
+  --text: #26342f; /* body */
+  --muted: #5b6a65;
+  --line: #e2e8e5;
+  --line-strong: #cfd8d4;
+  --surface: #ffffff;
+  --surface-2: #f5f7f6; /* page background */
+  --surface-3: #edf1ef;
+
+  /* Brand */
+  --brand: #0f5c4d;
+  --brand-700: #0b4a3e;
+  --brand-900: #072e27;
+  --brand-50: #eaf4f1;
+  --brand-100: #d3eae2;
+  --accent: #2fb5a0; /* AI / scan highlight; use sparingly */
+
+  /* Grades (mirror src/lib/gradeColors.ts) */
+  --grade-0: #1f9d55;
+  --grade-0-soft: #e6f4ec;
+  --grade-0-text: #136c3a;
+  --grade-1: #d4a20c;
+  --grade-1-soft: #fbf3d9;
+  --grade-1-text: #6f5300;
+  --grade-2: #e46f12;
+  --grade-2-soft: #fdeadb;
+  --grade-2-text: #8f3f05;
+  --grade-3: #d1352b;
+  --grade-3-soft: #fbe4e2;
+  --grade-3-text: #9b231c;
+  --grade-iu: #7b8794;
+  --grade-iu-soft: #eef1f4;
+  --grade-iu-text: #46515c;
+
+  /* Shape and depth */
+  --radius-sm: 8px;
+  --radius: 12px;
+  --radius-lg: 18px;
+  --shadow-sm: 0 1px 2px rgba(13, 38, 33, 0.06), 0 1px 1px rgba(13, 38, 33, 0.04);
+  --shadow: 0 10px 30px -12px rgba(13, 38, 33, 0.22), 0 2px 6px rgba(13, 38, 33, 0.06);
+  --shadow-lg: 0 30px 60px -20px rgba(13, 38, 33, 0.3), 0 8px 18px -8px rgba(13, 38, 33, 0.12);
+
+  /* Bootstrap bridge */
+  --bs-body-font-family: var(--font-sans);
+  --bs-body-color: var(--text);
+  --bs-body-bg: var(--surface); /* cards, inputs and dropdowns use this too; tint page areas with .bg-surface-2 */
+  --bs-emphasis-color: var(--ink);
+  --bs-secondary-color: var(--muted);
+  --bs-border-color: var(--line);
+  --bs-border-radius: var(--radius-sm);
+  --bs-border-radius-lg: var(--radius);
+  --bs-border-radius-xl: var(--radius-lg);
+  --bs-primary: #0f5c4d;
+  --bs-primary-rgb: 15, 92, 77;
+  --bs-link-color: #0f5c4d;
+  --bs-link-color-rgb: 15, 92, 77;
+  --bs-link-hover-color: #0b4a3e;
+  --bs-link-hover-color-rgb: 11, 74, 62;
+  --bs-focus-ring-color: rgba(15, 92, 77, 0.22);
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+h1, h2, h3, h4, h5, h6,
+.h1, .h2, .h3, .h4, .h5, .h6 {
+  color: var(--ink);
+  letter-spacing: -0.015em;
+}
+.display-1, .display-2, .display-3, .display-4, .display-5, .display-6 {
+  letter-spacing: -0.035em;
+  line-height: 1.05;
+}
+.lead {
+  color: var(--muted);
+}
+.eyebrow {
+  font-size: 0.78rem;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--brand);
+}
+
+.bg-surface-2 {
+  background-color: var(--surface-2);
+}
+
+/* Cards, buttons, forms */
+.card {
+  --bs-card-border-color: var(--line);
+  --bs-card-border-radius: var(--radius);
+  --bs-card-inner-border-radius: calc(var(--radius) - 1px);
+  box-shadow: var(--shadow-sm);
+}
+.btn {
+  --bs-btn-border-radius: 10px;
+  --bs-btn-font-weight: 600;
+}
+.btn-lg {
+  --bs-btn-padding-y: 0.8rem;
+  --bs-btn-padding-x: 1.4rem;
+  --bs-btn-border-radius: 12px;
+  --bs-btn-font-size: 1.05rem;
+}
+.form-control,
+.form-select {
+  border-radius: 10px;
+  border-color: var(--line-strong);
+}
+.form-control:focus,
+.form-select:focus,
+.form-check-input:focus {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 0.25rem rgba(15, 92, 77, 0.15);
+}
+.form-check-input:checked {
+  background-color: var(--brand);
+  border-color: var(--brand);
+}
+
+/* Grade badges (see GradeBadge.tsx) */
+.grade-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.22rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 650;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+.grade-badge::before {
+  content: "";
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.85;
+}
+.grade-badge-TG0 { background: var(--grade-0-soft); color: var(--grade-0-text); }
+.grade-badge-TG1 { background: var(--grade-1-soft); color: var(--grade-1-text); }
+.grade-badge-TG2 { background: var(--grade-2-soft); color: var(--grade-2-text); }
+.grade-badge-TG3 { background: var(--grade-3-soft); color: var(--grade-3-text); }
+.grade-badge-TGIU { background: var(--grade-iu-soft); color: var(--grade-iu-text); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
