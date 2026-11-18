@@ -17,6 +17,7 @@ import {
   type ChipTone,
   type SegPart,
 } from "@/components/report/ui";
+import { MoistureSection, OverallGrade, SealBlock, SystemsGrid } from "@/components/report/standardViews";
 import { ConditionMap3D, type ConditionItemState } from "@/components/three";
 import { AREA_LABEL, getTemplate, type Area } from "@/lib/checklist";
 import { COST_TABLE_VERIFIED, formatIsk, getCost } from "@/lib/costs";
@@ -37,6 +38,7 @@ import { drawingArchive } from "@/lib/municipal";
 import { buildReport, type ItemSection } from "@/lib/report";
 import type { FollowUp, InspectionBundle, Lang } from "@/lib/types";
 import { formatAddress } from "@/lib/postcodes";
+import { shortFingerprint, STANDARD_VERSION } from "@/lib/standard";
 
 const pct = (part: number, whole: number) => `${((part / whole) * 100).toFixed(1)} %`;
 
@@ -70,10 +72,28 @@ interface CompactEntry {
   key: string;
   title: string;
   state: ConditionItemState;
+  /** Why it was not assessed (standard), when marked not accessible. */
+  reason?: string;
 }
 
-/** Full condition report. Rendered in the report's own language. */
-export default function ReportView({ bundle }: { bundle: InspectionBundle }) {
+/**
+ * Full condition report. Rendered in the report's own language.
+ * `origin` (e.g. https://husryni.is) makes the printed verification link absolute.
+ */
+export default function ReportView({
+  bundle,
+  origin = "",
+  mode = "owner",
+  ownerTools,
+}: {
+  bundle: InspectionBundle;
+  origin?: string;
+  /** readonly: shared through a read link, so nothing that is the owner's (their link, negotiation, tools). */
+  mode?: "owner" | "readonly";
+  /** Owner-only panels shown before the limitations (sharing, quotes). */
+  ownerTools?: ReactNode;
+}) {
+  const owner = mode === "owner";
   const { inspection } = bundle;
   const lang = inspection.lang;
   const t = getDict(lang);
@@ -124,15 +144,18 @@ export default function ReportView({ bundle }: { bundle: InspectionBundle }) {
     { label: t.fPurpose, value: PURPOSE_LABEL[inspection.purpose][lang] },
     ...(inspection.fastanumer ? [{ label: t.fFastanumer.replace(/ \(.*\)/, ""), value: inspection.fastanumer }] : []),
     { label: t.created, value: dateFmt.format(new Date(inspection.createdAt)) },
-    { label: t.inspectionId, value: <span className="rp-mono">{inspection.id}</span>, wide: true },
+    // The inspection id is the owner's access key: never shown through a read-only link.
+    ...(owner ? [{ label: t.inspectionId, value: <span className="rp-mono">{inspection.id}</span>, wide: true }] : []),
   ];
+
+  const verifyHref = inspection.reportHash ? `${origin}/verify?code=${shortFingerprint(inspection.reportHash)}` : "";
 
   const stage = inspection.constructionStage ?? "unknown";
   const stageNote = STAGE_NOTE[stage];
   const archive = drawingArchive(inspection.postalCode);
 
   return (
-    <div className="rp-page">
+    <div className="rp-page" lang={lang}>
       <div className="container rp-wrap">
         <header className="rp-head">
           <div className="rp-printbrand" aria-hidden>
@@ -152,17 +175,29 @@ export default function ReportView({ bundle }: { bundle: InspectionBundle }) {
             </div>
           </div>
           <div className="rp-head__actions no-print">
-            {(inspection.status === "ai_report" || verified) && (
-              <a href={`/inspections/${inspection.id}/negotiate`} className="btn btn-primary">
-                <i className="bi bi-arrow-left-right me-2" aria-hidden />
-                {t.negLink}
-              </a>
+            {owner && (inspection.status === "ai_report" || verified) && (
+              <>
+                <a href={`/inspections/${inspection.id}/negotiate`} className="btn btn-primary">
+                  <i className="bi bi-arrow-left-right me-2" aria-hidden />
+                  {t.negLink}
+                </a>
+                <a href={`/inspections/${inspection.id}/history`} className="btn btn-outline-primary">
+                  <i className="bi bi-clock-history me-2" aria-hidden />
+                  {t.histLink}
+                </a>
+              </>
             )}
             <PrintButton label={t.print} />
           </div>
         </header>
 
         <div className="rp-stack">
+          {!owner && (
+            <div className="rp-callout rp-callout--info no-print" role="note">
+              <i className="bi bi-eye" aria-hidden />
+              <div>{t.roBanner}</div>
+            </div>
+          )}
           {r.usedMock && (
             <div className="rp-callout rp-callout--danger" role="note">
               <i className="bi bi-exclamation-octagon" aria-hidden />
@@ -216,6 +251,16 @@ export default function ReportView({ bundle }: { bundle: InspectionBundle }) {
                         <dd>{dateFmt.format(new Date(inspection.signedAt))}</dd>
                       </div>
                     )}
+                    {inspection.reportHash && (
+                      <div>
+                        <dt>{t.stdSealLabel}</dt>
+                        <dd>
+                          <a className="rp-mono std-seal__inline" href={verifyHref}>
+                            {shortFingerprint(inspection.reportHash)}
+                          </a>
+                        </dd>
+                      </div>
+                    )}
                   </dl>
                 ) : (
                   <p className="rp-seal__text">{t.draftWarning}</p>
@@ -223,6 +268,20 @@ export default function ReportView({ bundle }: { bundle: InspectionBundle }) {
               </div>
             </aside>
           </div>
+
+          <section className="card rp-card std-band" aria-label={t.stdOverall}>
+            <div className="card-body std-band__body">
+              <OverallGrade
+                overall={r.overall}
+                frozen={verified ? inspection.overallGrade : null}
+                standardVersion={verified ? inspection.standardVersion : STANDARD_VERSION}
+                lang={lang}
+                t={t}
+                itemTitle={itemTitle}
+              />
+              <SystemsGrid systems={r.systems} lang={lang} t={t} />
+            </div>
+          </section>
 
           <div className="rp-overview">
             <section className="card rp-card rp-overview__summary" aria-labelledby="rp-overview">
@@ -362,6 +421,8 @@ export default function ReportView({ bundle }: { bundle: InspectionBundle }) {
             </section>
           )}
 
+          {bundle.moisture.length > 0 && <MoistureSection readings={bundle.moisture} lang={lang} t={t} itemTitle={itemTitle} />}
+
           {r.costLines.length > 0 && (
             <section className="card rp-card" aria-labelledby="rp-costs">
               <div className="card-body">
@@ -476,7 +537,12 @@ export default function ReportView({ bundle }: { bundle: InspectionBundle }) {
                   {compact.length > 0 && (
                     <CompactList
                       t={t}
-                      entries={compact.map(({ s, state }) => ({ key: s.item.itemKey, title: s.template.title[lang], state }))}
+                      entries={compact.map(({ s, state }) => ({
+                        key: s.item.itemKey,
+                        title: s.template.title[lang],
+                        state,
+                        reason: s.item.notAccessible ? s.item.naReason : undefined,
+                      }))}
                     />
                   )}
                 </section>
@@ -511,9 +577,12 @@ export default function ReportView({ bundle }: { bundle: InspectionBundle }) {
                     </div>
                   </div>
                 </div>
+                <SealBlock inspection={inspection} lang={lang} t={t} verifyHref={verifyHref} />
               </div>
             </section>
           )}
+
+          {owner && ownerTools}
 
           <section className="rp-limits" aria-labelledby="rp-limits">
             <h2 id="rp-limits" className="rp-limits__title">
@@ -576,7 +645,7 @@ function ItemCard({ row, lang, t }: { row: Row; lang: Lang; t: Dict }) {
       </header>
       {skipped && (
         <p className="rp-item__summary">
-          {t.notAssessed}: {t.notAccessible.toLowerCase()}
+          {t.notAssessed}: {s.item.naReason || t.notAccessible.toLowerCase()}
         </p>
       )}
       {s.item.analysis?.itemSummary && !skipped && <p className="rp-item__summary">{s.item.analysis.itemSummary}</p>}
@@ -604,7 +673,10 @@ function CompactList({ entries, t }: { entries: CompactEntry[]; t: Dict }) {
         {entries.map((e) => (
           <li key={e.key} id={`item-${e.key}`} className="rp-compact__row">
             <Swatch color={itemColor(null, e.state)} />
-            <span className="rp-compact__name">{e.title}</span>
+            <span className="rp-compact__name">
+              {e.title}
+              {e.reason && <span className="std-na-reason"> · {e.reason}</span>}
+            </span>
             <span className="rp-compact__status">{e.state === "skipped" ? t.rpLegendSkipped : t.rpLegendPending}</span>
           </li>
         ))}

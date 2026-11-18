@@ -20,6 +20,8 @@ export interface CaptureItem {
   status: ItemStatus;
   notes: string;
   notAccessible: boolean;
+  /** Why the item can't be assessed (the standard requires one when notAccessible). */
+  naReason: string;
   analysis: ItemAnalysisRecord | null;
   photoIds: string[];
   /** Result of the instant photo check (fast model), by photo id. */
@@ -307,7 +309,7 @@ function ItemCard({ inspectionId, item, lang, t }: { inspectionId: string; item:
     refresh();
   }
 
-  async function patch(body: { notes?: string; notAccessible?: boolean }) {
+  async function patch(body: { notes?: string; notAccessible?: boolean; naReason?: string }) {
     setError(null);
     const res = await fetch(`/api/inspections/${inspectionId}/items/${item.key}`, {
       method: "PATCH",
@@ -357,6 +359,12 @@ function ItemCard({ inspectionId, item, lang, t }: { inspectionId: string; item:
           <h3 className="sh-item-title">{item.title}</h3>
           <div className="sh-item-meta">
             <span className={`sh-state is-${state}`}>{stateLabel}</span>
+            {item.notAccessible && !item.naReason.trim() && (
+              <span className="sh-chip std-chip-warn">
+                <i className="bi bi-exclamation-circle" aria-hidden />
+                {t.stdNaNeeded}
+              </span>
+            )}
             {item.minPhotos > 0 ? (
               <span className={`sh-chip${photoCount >= item.minPhotos ? " is-met" : ""}`} title={`${t.minPhotos}: ${item.minPhotos}`}>
                 <i className={`bi ${photoCount >= item.minPhotos ? "bi-check2" : "bi-images"}`} aria-hidden />
@@ -511,6 +519,8 @@ function ItemCard({ inspectionId, item, lang, t }: { inspectionId: string; item:
         </div>
       </div>
 
+      {item.notAccessible && <NaReason item={item} t={t} busy={busy} onSave={(naReason) => patch({ naReason })} />}
+
       {analyzing && (
         <p className="sh-analyzing-hint" role="status">
           <span className="sh-ai-badge">{t.aiFinding}</span>
@@ -596,5 +606,46 @@ function Elapsed() {
     <span className="ms-1" style={{ fontVariantNumeric: "tabular-nums" }}>
       {Math.floor(seconds / 60)}:{String(seconds % 60).padStart(2, "0")}
     </span>
+  );
+}
+
+/** The standard: an item that can't be assessed needs a reason, shown in the report. Quick picks or free text. */
+function NaReason({ item, t, busy, onSave }: { item: CaptureItem; t: Dict; busy: boolean; onSave: (reason: string) => Promise<void> }) {
+  const [reason, setReason] = useState(item.naReason);
+  const picks = [t.stdNaLocked, t.stdNaNotApplicable, t.stdNaCovered, t.stdNaUnsafe];
+  // Typing then clicking a quick pick fires blur and click: send the saves in order so the last choice wins.
+  const queue = useRef<Promise<void>>(Promise.resolve());
+  const saved = useRef(item.naReason.trim());
+  const save = (value: string) => {
+    setReason(value);
+    queue.current = queue.current.then(async () => {
+      if (value.trim() === saved.current) return;
+      saved.current = value.trim();
+      await onSave(value);
+    });
+  };
+  return (
+    <div className={`std-na${reason.trim() ? "" : " is-missing"}`}>
+      <label className="form-label" htmlFor={`nar-${item.key}`}>
+        {t.stdNaLabel}
+      </label>
+      <div className="std-na__picks" role="group" aria-label={t.stdNaLabel}>
+        {picks.map((p) => (
+          <button key={p} type="button" className={`std-na__pick${reason === p ? " is-on" : ""}`} aria-pressed={reason === p} disabled={busy} onClick={() => save(p)}>
+            {p}
+          </button>
+        ))}
+      </div>
+      <input
+        id={`nar-${item.key}`}
+        className="form-control form-control-sm"
+        placeholder={t.stdNaPh}
+        value={reason}
+        maxLength={500}
+        disabled={busy}
+        onChange={(e) => setReason(e.target.value)}
+        onBlur={() => save(reason)}
+      />
+    </div>
   );
 }

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import CaptureClient, { type CaptureItem } from "@/components/CaptureClient";
 import { aiEngine } from "@/lib/ai";
 import { AREA_LABEL, getTemplate, riskNotes } from "@/lib/checklist";
@@ -22,6 +22,7 @@ export default async function CapturePage({ params }: { params: Promise<{ id: st
   const { id } = await params;
   const bundle = getBundle(id);
   if (!bundle) notFound();
+  if (bundle.inspection.kind === "annual") redirect(`/inspections/${id}/annual`);
   const lang = await getLang();
   const t = getDict(lang);
   const { inspection } = bundle;
@@ -111,6 +112,7 @@ export default async function CapturePage({ params }: { params: Promise<{ id: st
         status: item.status,
         notes: item.notes,
         notAccessible: item.notAccessible,
+        naReason: item.naReason,
         analysis: item.analysis,
         photoIds: bundle.photos.filter((p) => p.itemKey === item.itemKey).map((p) => p.id),
         photoChecks: Object.fromEntries(

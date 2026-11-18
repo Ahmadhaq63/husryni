@@ -5,9 +5,12 @@ import { GRADE_ORDER, StatusChip } from "@/components/report/ui";
 import { getTemplate } from "@/lib/checklist";
 import { GRADE_COLOR } from "@/lib/gradeColors";
 import { getDict } from "@/lib/i18n";
-import { CONSTRUCTION_LABEL, GRADE_INFO, HEATING_LABEL, PROPERTY_TYPE_LABEL, PURPOSE_LABEL } from "@/lib/labels";
-import { getBundle } from "@/lib/repo";
+import { CONSTRUCTION_LABEL, GRADE_INFO, HEATING_LABEL, PROPERTY_TYPE_LABEL, PURPOSE_LABEL, STATUS_LABEL } from "@/lib/labels";
+import { formatIsk } from "@/lib/costs";
+import { feeForTier } from "@/lib/pricing";
+import { getBundle, relatedReports } from "@/lib/repo";
 import { buildReport } from "@/lib/report";
+import { overallReasonText } from "@/lib/standard";
 import { getLang, isInspector } from "@/lib/server/session";
 import { formatAddress } from "@/lib/postcodes";
 
@@ -51,6 +54,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
   }
 
   const report = buildReport(bundle);
+  const related = relatedReports(inspection);
   const items: ReviewItem[] = bundle.items.flatMap((item) => {
     const tpl = getTemplate(item.itemKey);
     if (!tpl) return [];
@@ -64,6 +68,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
         title: tpl.title[lang],
         notes: item.notes,
         skipped: item.status === "skipped",
+        naReason: item.naReason,
         itemSummary: item.analysis?.itemSummary ?? null,
         photoIds,
         libraryPhotoIds: itemPhotos.filter((p) => p.source === "upload").map((p) => p.id),
@@ -123,6 +128,24 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
               ))}
             </ul>
           </div>
+          {related.length > 0 && (
+            <aside className="rel-reports" aria-labelledby="rel-title">
+              <h2 id="rel-title" className="rp-label">
+                {t.relTitle}
+              </h2>
+              <ul>
+                {related.map(({ inspection: r, match }) => (
+                  <li key={r.id}>
+                    <Link href={r.status === "in_review" ? `/inspector/${r.id}` : `/inspections/${r.id}/report`} target="_blank">
+                      {new Intl.DateTimeFormat(lang === "is" ? "is-IS" : "en-GB", { dateStyle: "medium" }).format(new Date(r.createdAt))}
+                    </Link>{" "}
+                    · {STATUS_LABEL[r.status][lang]}
+                    {r.overallGrade && ` · ${r.overallGrade}`} · <span className="rel-reports__match">{match === "fastanumer" ? t.relSameFnr : t.relSameAddr}</span>
+                  </li>
+                ))}
+              </ul>
+            </aside>
+          )}
           <div className="rp-head__actions">
             <Link href={`/inspections/${id}/report`} className="btn btn-outline-primary" target="_blank">
               {t.viewReport}
@@ -130,7 +153,22 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
             </Link>
           </div>
         </header>
-        <ReviewClient inspectionId={id} lang={lang} items={items} defaultStatement={getDict(inspection.lang).signDefaultStatement} />
+        <ReviewClient
+          inspectionId={id}
+          lang={lang}
+          items={items}
+          defaultStatement={getDict(inspection.lang).signDefaultStatement}
+          moisture={bundle.moisture}
+          feeText={(() => {
+            const fee = feeForTier(inspection.tier);
+            return fee != null ? formatIsk(fee, lang) : t.stdFeeQuoted;
+          })()}
+          overall={{
+            grade: report.overall.grade,
+            reason: overallReasonText(report.overall, lang, (k) => getTemplate(k)?.title[lang] ?? k),
+            notAssessed: report.overall.notAssessed.length,
+          }}
+        />
       </div>
     </div>
   );

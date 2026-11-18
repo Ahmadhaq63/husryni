@@ -4,6 +4,7 @@ import "./globals.css";
 import "../styles/theme.css";
 import "../styles/shell.css";
 import "../styles/report.css";
+import "../styles/standard.css";
 import "../styles/three.css";
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";

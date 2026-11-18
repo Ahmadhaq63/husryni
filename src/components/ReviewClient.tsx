@@ -4,9 +4,22 @@ import { useRouter } from "next/navigation";
 import { useId, useState, useTransition } from "react";
 import FindingView from "./FindingView";
 import { Chip, SegBar, Swatch, describeParts, type SegPart } from "./report/ui";
+import GradeBadge from "./GradeBadge";
 import { COST_CATALOG } from "@/lib/costs";
 import { getDict, type Dict } from "@/lib/i18n";
 import { FOLLOW_UP_LABEL, GRADE_INFO, URGENCY_LABEL } from "@/lib/labels";
+import {
+  MOISTURE_LEVEL_LABEL,
+  MOISTURE_METHOD_LABEL,
+  MOISTURE_METHODS,
+  formatReading,
+  missingCauseOrConsequence,
+  moistureLevel,
+  moistureScaleText,
+  needsCauseAndConsequence,
+  OVERALL_RULE,
+  type MoistureMethod,
+} from "@/lib/standard";
 import {
   FOLLOW_UPS,
   GRADES,
@@ -15,6 +28,7 @@ import {
   type FollowUp,
   type Grade,
   type Lang,
+  type MoistureReading,
   type Urgency,
 } from "@/lib/types";
 
@@ -23,6 +37,8 @@ export interface ReviewItem {
   title: string;
   notes: string;
   skipped: boolean;
+  /** Why the item could not be assessed. */
+  naReason: string;
   itemSummary: string | null;
   photoIds: string[];
   /** Photos picked from the device library instead of taken live in the app. */
@@ -35,11 +51,18 @@ interface Props {
   lang: Lang;
   items: ReviewItem[];
   defaultStatement: string;
+  moisture: MoistureReading[];
+  /** Fixed fee for this tier, formatted on the server (locale data differs between browsers). */
+  feeText: string;
+  /** Live preview of the overall grade by the published rule. */
+  overall: { grade: Grade; reason: string; notAssessed: number };
 }
 
 type Draft = {
   title: string;
   description: string;
+  cause: string;
+  consequence: string;
   grade: Grade;
   recommendedAction: string;
   followUp: FollowUp;
@@ -51,6 +74,8 @@ type Draft = {
 const draftOf = (f: Finding): Draft => ({
   title: f.title,
   description: f.description,
+  cause: f.cause,
+  consequence: f.consequence,
   grade: f.grade,
   recommendedAction: f.recommendedAction,
   followUp: f.followUp,
@@ -62,6 +87,8 @@ const draftOf = (f: Finding): Draft => ({
 const EMPTY: Draft = {
   title: "",
   description: "",
+  cause: "",
+  consequence: "",
   grade: "TG2",
   recommendedAction: "",
   followUp: "none",
@@ -79,7 +106,7 @@ async function errorText(res: Response, lang: Lang, fallback: string) {
   }
 }
 
-export default function ReviewClient({ inspectionId, lang, items, defaultStatement }: Props) {
+export default function ReviewClient({ inspectionId, lang, items, defaultStatement, moisture, feeText, overall }: Props) {
   const t = getDict(lang);
   const router = useRouter();
   const [, startRefresh] = useTransition();
@@ -87,6 +114,9 @@ export default function ReviewClient({ inspectionId, lang, items, defaultStateme
 
   const pendingCount = items.flatMap((i) => i.findings).filter((f) => f.reviewStatus === "pending").length;
   const [sign, setSign] = useState({ name: "", license: "", statement: defaultStatement });
+  const [declared, setDeclared] = useState(false);
+  const missingCause = items.flatMap((i) => i.findings).filter(missingCauseOrConsequence).length;
+  const fee = feeText;
   const [signing, setSigning] = useState(false);
   const [signError, setSignError] = useState<string | null>(null);
 
@@ -97,7 +127,7 @@ export default function ReviewClient({ inspectionId, lang, items, defaultStateme
       const res = await fetch(`/api/inspector/inspections/${inspectionId}/sign`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(sign),
+        body: JSON.stringify({ ...sign, declaration: declared }),
       });
       if (!res.ok) {
         setSignError(await errorText(res, lang, t.error));
@@ -121,6 +151,7 @@ export default function ReviewClient({ inspectionId, lang, items, defaultStateme
   return (
     <div className="rp-review">
       <div className="rp-review__items">
+        <MoistureCard inspectionId={inspectionId} lang={lang} t={t} readings={moisture} items={items} onChanged={refresh} />
         {items.map((item) => {
           const compact = item.photoIds.length === 0 && item.findings.length === 0 && !item.notes && !item.itemSummary;
           return (
@@ -143,6 +174,14 @@ export default function ReviewClient({ inspectionId, lang, items, defaultStateme
                     )}
                   </div>
                 </header>
+                {item.skipped && (
+                  <div className="rp-ritem__notes">
+                    <i className="bi bi-slash-circle" aria-hidden />
+                    <span>
+                      <strong>{t.stdNaReason}:</strong> {item.naReason || "—"}
+                    </span>
+                  </div>
+                )}
                 {item.notes && (
                   <div className="rp-ritem__notes">
                     <i className="bi bi-chat-left-text" aria-hidden />
@@ -230,12 +269,29 @@ export default function ReviewClient({ inspectionId, lang, items, defaultStateme
                   {t.signTitle}
                 </h2>
               </div>
+              <div className="std-overall std-overall--compact mb-3">
+                <GradeBadge grade={overall.grade} lang={lang} />
+                <div>
+                  <div className="std-overall__label">{t.stdOverall}</div>
+                  <div className="std-overall__reason">{overall.reason}</div>
+                  <details className="std-rule">
+                    <summary>{t.stdShowRule}</summary>
+                    <p>{OVERALL_RULE[lang]}</p>
+                  </details>
+                </div>
+              </div>
               {pendingCount > 0 && (
                 <div className="rp-callout rp-callout--warning mb-3" role="status">
                   <i className="bi bi-hourglass-split" aria-hidden />
                   <div>
                     {pendingCount} {t.unpendingCount}
                   </div>
+                </div>
+              )}
+              {missingCause > 0 && (
+                <div className="rp-callout rp-callout--warning mb-3" role="status">
+                  <i className="bi bi-card-text" aria-hidden />
+                  <div>{t.stdSignMissingCause.replace("{n}", String(missingCause))}</div>
                 </div>
               )}
               <div className="mb-3">
@@ -256,13 +312,30 @@ export default function ReviewClient({ inspectionId, lang, items, defaultStateme
                 </label>
                 <textarea id="signStatement" className="form-control" rows={4} value={sign.statement} onChange={(e) => setSign({ ...sign, statement: e.target.value })} />
               </div>
+              <dl className="std-fee mb-3">
+                <dt>{t.stdFixedFee}</dt>
+                <dd>
+                  {fee} <span className="std-fee__note">· {t.stdFeeIndependent}</span>
+                </dd>
+              </dl>
+              <div className="form-check std-decl mb-3">
+                <input id="signDecl" type="checkbox" className="form-check-input" checked={declared} onChange={(e) => setDeclared(e.target.checked)} />
+                <label className="form-check-label" htmlFor="signDecl">
+                  <strong>{t.stdDeclTitle}.</strong> {t.stdDeclText.replace("{fee}", fee)}
+                </label>
+              </div>
               {signError && (
                 <div className="rp-callout rp-callout--danger mb-3" role="alert">
                   <i className="bi bi-exclamation-circle" aria-hidden />
                   <div>{signError}</div>
                 </div>
               )}
-              <button type="button" className="btn btn-primary btn-lg w-100" disabled={signing || pendingCount > 0 || !sign.name || !sign.license} onClick={doSign}>
+              <button
+                type="button"
+                className="btn btn-primary btn-lg w-100"
+                disabled={signing || pendingCount > 0 || missingCause > 0 || !declared || !sign.name || !sign.license}
+                onClick={doSign}
+              >
                 {signing ? (
                   <>
                     <span className="spinner-border spinner-border-sm me-2" aria-hidden />
@@ -275,6 +348,10 @@ export default function ReviewClient({ inspectionId, lang, items, defaultStateme
                   </>
                 )}
               </button>
+              <p className="std-locknote">
+                <i className="bi bi-shield-lock" aria-hidden />
+                {t.stdLockNote}
+              </p>
             </div>
           </section>
         </div>
@@ -310,6 +387,34 @@ function FindingFields({ draft, setDraft, t, lang }: { draft: Draft; setDraft: (
           {t.description}
         </label>
         <textarea id={`${id}-description`} className="form-control form-control-sm" rows={3} value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} />
+      </div>
+      <div className="col-md-6">
+        <label className="form-label" htmlFor={`${id}-cause`}>
+          {t.stdCause}
+          {needsCauseAndConsequence(draft.grade) && <span className="std-req"> · {t.stdCauseHint}</span>}
+        </label>
+        <textarea
+          id={`${id}-cause`}
+          className="form-control form-control-sm"
+          rows={2}
+          placeholder={t.stdCausePh}
+          value={draft.cause}
+          onChange={(e) => setDraft({ ...draft, cause: e.target.value })}
+        />
+      </div>
+      <div className="col-md-6">
+        <label className="form-label" htmlFor={`${id}-consequence`}>
+          {t.stdConsequence}
+          {needsCauseAndConsequence(draft.grade) && <span className="std-req"> · {t.stdCauseHint}</span>}
+        </label>
+        <textarea
+          id={`${id}-consequence`}
+          className="form-control form-control-sm"
+          rows={2}
+          placeholder={t.stdConsequencePh}
+          value={draft.consequence}
+          onChange={(e) => setDraft({ ...draft, consequence: e.target.value })}
+        />
       </div>
       <div className="col-12">
         <label className="form-label" htmlFor={`${id}-action`}>
@@ -413,6 +518,18 @@ function FindingEditor({
     }
   }
 
+  const incomplete = missingCauseOrConsequence(finding);
+  function confirm() {
+    // The standard needs a cause and a consequence on TG2/TG3: open the editor instead of confirming without them.
+    if (incomplete) {
+      setDraft(draftOf(finding));
+      setEditing(true);
+      setError(t.stdCauseMissingConfirm);
+      return;
+    }
+    send({ reviewStatus: "confirmed" });
+  }
+
   const statusBadge =
     finding.reviewStatus === "pending" ? (
       <Chip tone="warning" icon="bi-hourglass-split">
@@ -447,7 +564,14 @@ function FindingEditor({
         </div>
       )}
       <div className="rp-reditor__bar">
-        <div>{statusBadge}</div>
+        <div className="std-badges">
+          {statusBadge}
+          {incomplete && (
+            <Chip tone="warning" icon="bi-card-text">
+              {t.stdCauseMissing}
+            </Chip>
+          )}
+        </div>
         <div className="rp-reditor__actions">
           {editing ? (
             <>
@@ -461,7 +585,7 @@ function FindingEditor({
             </>
           ) : (
             <>
-              <button type="button" className="btn btn-sm btn-success" disabled={busy} onClick={() => send({ reviewStatus: "confirmed" })}>
+              <button type="button" className="btn btn-sm btn-success" disabled={busy} onClick={confirm}>
                 <i className="bi bi-check2 me-1" aria-hidden />
                 {t.confirm}
               </button>
@@ -545,5 +669,197 @@ function AddFinding({ inspectionId, itemKey, lang, t, onAdded }: { inspectionId:
         </button>
       </div>
     </div>
+  );
+}
+
+/** Moisture readings taken on site (resistance meter, WME %), recorded as data on the report. */
+function MoistureCard({
+  inspectionId,
+  lang,
+  t,
+  readings,
+  items,
+  onChanged,
+}: {
+  inspectionId: string;
+  lang: Lang;
+  t: Dict;
+  readings: MoistureReading[];
+  items: ReviewItem[];
+  onChanged: () => void;
+}) {
+  const id = useId();
+  const [form, setForm] = useState({ room: "", part: "", value: "", method: "pin" as MoistureMethod, itemKey: "" });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const title = (key: string | null) => items.find((i) => i.key === key)?.title ?? "—";
+  const value = Number(form.value.replace(",", "."));
+  const valid = form.room.trim() && form.part.trim() && form.value.trim() !== "" && Number.isFinite(value) && value >= 0 && value <= 100;
+
+  // A wet reading on an item without a TG2/TG3 finding deserves a second look (soft warning, not a block).
+  const warnings = readings
+    .filter((r) => r.itemKey && moistureLevel(r.value) === "wet")
+    .filter((r) => !items.find((i) => i.key === r.itemKey)?.findings.some((f) => f.reviewStatus !== "rejected" && (f.grade === "TG2" || f.grade === "TG3")))
+    .map((r) => t.stdMoistWetNoFinding.replace("{room}", `${r.room}, ${formatReading(r.value, lang)} %`).replace("{item}", title(r.itemKey)));
+
+  async function add() {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/inspector/inspections/${inspectionId}/moisture`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ room: form.room, part: form.part, value, method: form.method, itemKey: form.itemKey || null }),
+      });
+      if (!res.ok) {
+        setError(await errorText(res, lang, t.error));
+        return;
+      }
+      setForm({ ...form, part: "", value: "" });
+      onChanged();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove(readingId: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/inspector/moisture/${readingId}`, { method: "DELETE" });
+      if (!res.ok) setError(await errorText(res, lang, t.error));
+      onChanged();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="card rp-ritem std-moist" aria-labelledby={`${id}-title`}>
+      <div className="card-body">
+        <header className="rp-ritem__head">
+          <h2 id={`${id}-title`} className="rp-ritem__title">
+            <i className="bi bi-moisture me-2" aria-hidden />
+            {t.stdMoistTitle}
+          </h2>
+          <Chip tone="outline">{readings.length}</Chip>
+        </header>
+        <p className="std-moist__lead">{t.stdMoistLead}</p>
+        {readings.length > 0 ? (
+          <div className="table-responsive">
+            <table className="rp-table std-moist__table">
+              <thead>
+                <tr>
+                  <th scope="col">{t.stdMoistRoom}</th>
+                  <th scope="col">{t.stdMoistPart}</th>
+                  <th scope="col">{t.stdMoistItem}</th>
+                  <th scope="col" className="num">
+                    {t.stdMoistValue}
+                  </th>
+                  <th scope="col">{t.stdMoistLevel}</th>
+                  <th scope="col">
+                    <span className="visually-hidden">{t.stdMoistDelete}</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {readings.map((r) => {
+                  const level = moistureLevel(r.value);
+                  return (
+                    <tr key={r.id}>
+                      <td>{r.room}</td>
+                      <td>
+                        {r.part}
+                        <div className="rp-table__sub">{MOISTURE_METHOD_LABEL[r.method][lang]}</div>
+                      </td>
+                      <td>{r.itemKey ? title(r.itemKey) : "—"}</td>
+                      <td className="num">{formatReading(r.value, lang)}</td>
+                      <td>
+                        <span className={`std-level std-level--${level}`}>{MOISTURE_LEVEL_LABEL[level][lang]}</span>
+                      </td>
+                      <td className="num">
+                        <button type="button" className="btn btn-sm btn-link text-danger p-0" disabled={busy} onClick={() => remove(r.id)} aria-label={`${t.stdMoistDelete}: ${r.room}, ${r.part}`}>
+                          <i className="bi bi-trash" aria-hidden />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="std-moist__none">{t.stdMoistNone}</p>
+        )}
+        {warnings.length > 0 && (
+          <div className="rp-callout rp-callout--warning mt-3" role="status">
+            <i className="bi bi-exclamation-triangle" aria-hidden />
+            <ul className="mb-0 ps-3">
+              {warnings.map((w, i) => (
+                <li key={i}>{w}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+        <div className="row g-2 std-moist__form">
+          <div className="col-sm-6 col-lg-3">
+            <label className="form-label" htmlFor={`${id}-room`}>
+              {t.stdMoistRoom}
+            </label>
+            <input id={`${id}-room`} className="form-control form-control-sm" placeholder={t.stdMoistRoomPh} value={form.room} onChange={(e) => setForm({ ...form, room: e.target.value })} />
+          </div>
+          <div className="col-sm-6 col-lg-3">
+            <label className="form-label" htmlFor={`${id}-part`}>
+              {t.stdMoistPart}
+            </label>
+            <input id={`${id}-part`} className="form-control form-control-sm" placeholder={t.stdMoistPartPh} value={form.part} onChange={(e) => setForm({ ...form, part: e.target.value })} />
+          </div>
+          <div className="col-4 col-lg-2">
+            <label className="form-label" htmlFor={`${id}-value`}>
+              {t.stdMoistValue}
+            </label>
+            <input id={`${id}-value`} className="form-control form-control-sm" inputMode="decimal" value={form.value} onChange={(e) => setForm({ ...form, value: e.target.value })} />
+          </div>
+          <div className="col-8 col-lg-4">
+            <label className="form-label" htmlFor={`${id}-item`}>
+              {t.stdMoistItem}
+            </label>
+            <select id={`${id}-item`} className="form-select form-select-sm" value={form.itemKey} onChange={(e) => setForm({ ...form, itemKey: e.target.value })}>
+              <option value="">{t.stdMoistNoItem}</option>
+              {items.map((i) => (
+                <option key={i.key} value={i.key}>
+                  {i.title}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="col-sm-6 col-lg-4">
+            <label className="form-label" htmlFor={`${id}-method`}>
+              {t.stdMoistMethod}
+            </label>
+            <select id={`${id}-method`} className="form-select form-select-sm" value={form.method} onChange={(e) => setForm({ ...form, method: e.target.value as MoistureMethod })}>
+              {MOISTURE_METHODS.map((m) => (
+                <option key={m} value={m}>
+                  {MOISTURE_METHOD_LABEL[m][lang]}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="col-sm-6 col-lg-8 d-flex align-items-end justify-content-between gap-2 flex-wrap">
+            <span className="std-moist__scale">{moistureScaleText(lang)}</span>
+            <button type="button" className="btn btn-sm btn-primary" disabled={busy || !valid} onClick={add}>
+              <i className="bi bi-plus-lg me-1" aria-hidden />
+              {t.stdMoistAdd}
+            </button>
+          </div>
+        </div>
+        {error && (
+          <div className="rp-callout rp-callout--danger mt-3" role="alert">
+            <i className="bi bi-exclamation-circle" aria-hidden />
+            <div>{error}</div>
+          </div>
+        )}
+      </div>
+    </section>
   );
 }

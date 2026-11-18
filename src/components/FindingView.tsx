@@ -41,6 +41,22 @@ export default function FindingView({
       </div>
       <div className="rp-finding__title">{finding.title}</div>
       {finding.description && <p className="rp-finding__desc">{finding.description}</p>}
+      {(finding.cause || finding.consequence) && (
+        <dl className="rp-finding__cc">
+          {finding.cause && (
+            <div>
+              <dt>{t.stdCause}</dt>
+              <dd>{finding.cause}</dd>
+            </div>
+          )}
+          {finding.consequence && (
+            <div>
+              <dt>{t.stdConsequence}</dt>
+              <dd>{finding.consequence}</dd>
+            </div>
+          )}
+        </dl>
+      )}
       {finding.recommendedAction && (
         <div className="rp-finding__action">
           <i className="bi bi-tools" aria-hidden />

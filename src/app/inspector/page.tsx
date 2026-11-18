@@ -5,6 +5,7 @@ import { getDict } from "@/lib/i18n";
 import { PROPERTY_TYPE_LABEL, STATUS_LABEL, TIER_LABEL } from "@/lib/labels";
 import { getBundle, listInspections } from "@/lib/repo";
 import { activeFindings } from "@/lib/report";
+import { AGREEMENT_TARGET_PCT, agreementPairs, agreementStats, type AgreementPair, type AgreementStats } from "@/lib/standard";
 import { getLang, isInspector } from "@/lib/server/session";
 import type { InspectionStatus } from "@/lib/types";
 import { postcodeWithTown } from "@/lib/postcodes";
@@ -35,6 +36,23 @@ export default async function InspectorHome() {
   const statuses = (Object.keys(ORDER) as InspectionStatus[]).sort((a, b) => ORDER[a] - ORDER[b]);
   const countBy = (s: InspectionStatus) => inspections.filter((i) => i.status === s).length;
 
+  // AI–inspector agreement over signed reports: the AI's original grade vs the inspector's final one, per item.
+  const bundles = new Map(inspections.map((i) => [i.id, getBundle(i.id)]));
+  const perReport = new Map<string, AgreementStats>();
+  const allPairs: AgreementPair[] = [];
+  for (const i of inspections.filter((x) => x.status === "verified")) {
+    const b = bundles.get(i.id);
+    if (!b) continue;
+    const pairs = agreementPairs(
+      b.items.map((it) => ({ itemKey: it.itemKey, analyzed: it.status === "analyzed", skipped: it.status === "skipped" })),
+      b.findings,
+    );
+    if (pairs.length) perReport.set(i.id, agreementStats(pairs));
+    allPairs.push(...pairs);
+  }
+  const agreement = agreementStats(allPairs);
+  const numLocale = lang === "is" ? "is-IS" : "en-GB";
+
   return (
     <div className="rp-page">
       <div className="container rp-wrap rp-wrap--wide">
@@ -61,6 +79,31 @@ export default async function InspectorHome() {
           ))}
         </ul>
 
+        <section className="card rp-card agr-card mb-4" aria-labelledby="agr-title">
+          <div className="card-body">
+            <div className="agr-card__main">
+              <div>
+                <h2 id="agr-title" className="rp-label">
+                  {t.agrTitle}
+                </h2>
+                <p className="agr-card__lead">{t.agrLead.replace("{target}", String(AGREEMENT_TARGET_PCT))}</p>
+              </div>
+              {agreement.withinOnePct != null ? (
+                <div className={`agr-card__value${agreement.withinOnePct >= AGREEMENT_TARGET_PCT ? " is-ok" : " is-low"}`}>
+                  {agreement.withinOnePct.toLocaleString(numLocale)} %
+                </div>
+              ) : (
+                <div className="agr-card__none">{t.agrNone}</div>
+              )}
+            </div>
+            {agreement.withinOnePct != null && (
+              <div className="agr-card__sub">
+                <span>{t.agrExact.replace("{p}", (agreement.exactPct ?? 0).toLocaleString(numLocale))}</span>
+                <span>{t.agrBasis.replace("{n}", String(agreement.items)).replace("{m}", String(perReport.size))}</span>
+              </div>
+            )}
+          </div>
+        </section>
         {inspections.length === 0 ? (
           <div className="card rp-card rp-empty">
             <div className="card-body">
@@ -84,6 +127,9 @@ export default async function InspectorHome() {
                   <th scope="col" className="num">
                     <span className="rp-swatch" style={{ background: "var(--grade-3)" }} aria-hidden /> TG3
                   </th>
+                  <th scope="col" className="num">
+                    {t.agrCol}
+                  </th>
                   <th scope="col">{t.created}</th>
                   <th scope="col">
                     <span className="visually-hidden">{t.open}</span>
@@ -92,7 +138,8 @@ export default async function InspectorHome() {
               </thead>
               <tbody>
                 {inspections.map((i) => {
-                  const findings = activeFindings(getBundle(i.id)?.findings ?? []);
+                  const findings = activeFindings(bundles.get(i.id)?.findings ?? []);
+                  const agr = perReport.get(i.id);
                   const tg2 = findings.filter((f) => f.grade === "TG2").length;
                   const tg3 = findings.filter((f) => f.grade === "TG3").length;
                   return (
@@ -115,6 +162,9 @@ export default async function InspectorHome() {
                       </td>
                       <td data-label="TG3" className={`num${tg3 ? " is-hot" : ""}`}>
                         {tg3}
+                      </td>
+                      <td data-label={t.agrCol} className="num">
+                        {agr?.withinOnePct != null ? `${agr.withinOnePct.toLocaleString(numLocale)} %` : "—"}
                       </td>
                       <td data-label={t.created} className="rp-qtable__date">
                         {dateFmt.format(new Date(i.createdAt))}
