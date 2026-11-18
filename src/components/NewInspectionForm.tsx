@@ -12,6 +12,8 @@ import {
   TIER_LABEL,
 } from "@/lib/labels";
 import { PLANS } from "@/lib/pricing";
+import { townFor } from "@/lib/postcodes";
+import AddressAutocomplete from "@/components/AddressAutocomplete";
 import {
   CONSTRUCTION_STAGES,
   CONSTRUCTION_TYPES,
@@ -100,6 +102,7 @@ export default function NewInspectionForm({ lang, initialTier }: { lang: Lang; i
   }
 
   const plan = PLANS.find((p) => p.key === form.tier);
+  const town = townFor(form.postalCode);
   // Server-reported field names → label and input id, so the error can link to each field.
   const fieldLabel: Record<string, [string, string]> = {
     address: [t.fAddress, "address"],
@@ -127,11 +130,24 @@ export default function NewInspectionForm({ lang, initialTier }: { lang: Lang; i
             <div className="row g-3">
               <div className="col-md-8">
                 <label className="form-label" htmlFor="address">{t.fAddress}</label>
-                <input id="address" className={`form-control${invalid("address")}`} required value={form.address} onChange={(e) => set("address", e.target.value)} autoComplete="street-address" />
+                <AddressAutocomplete
+                  id="address"
+                  lang={lang}
+                  value={form.address}
+                  invalid={badFields.includes("address")}
+                  onChange={(v) => set("address", v)}
+                  onPick={({ address, postcode }) => setForm((f) => ({ ...f, address, postalCode: postcode }))}
+                />
               </div>
               <div className="col-md-4">
                 <label className="form-label" htmlFor="postalCode">{t.fPostalCode}</label>
-                <input id="postalCode" className={`form-control${invalid("postalCode")}`} inputMode="numeric" maxLength={3} required value={form.postalCode} onChange={(e) => set("postalCode", e.target.value)} />
+                <input id="postalCode" className={`form-control${invalid("postalCode")}`} inputMode="numeric" maxLength={3} required value={form.postalCode} onChange={(e) => set("postalCode", e.target.value)} aria-describedby={town ? "postalCode-town" : undefined} />
+                {town && (
+                  <div id="postalCode-town" className="form-text sh-town">
+                    <i className="bi bi-geo-alt" aria-hidden />
+                    {town}
+                  </div>
+                )}
               </div>
               <div className="col-md-6">
                 <label className="form-label" htmlFor="propertyType">{t.fPropertyType}</label>

@@ -9,6 +9,7 @@ import { getBundle } from "@/lib/repo";
 import { readyToSubmit } from "@/lib/report";
 import { getLang } from "@/lib/server/session";
 import type { InspectionStatus } from "@/lib/types";
+import { formatAddress } from "@/lib/postcodes";
 
 const STATUS_ICON: Record<InspectionStatus, string> = {
   capturing: "bi-camera",
@@ -57,7 +58,7 @@ export default async function CapturePage({ params }: { params: Promise<{ id: st
             </span>
             <p className="sh-status-pill">{STATUS_LABEL[inspection.status][lang]}</p>
             <h1 className="sh-status-title">
-              {inspection.address}, {inspection.postalCode}
+              {formatAddress(inspection.address, inspection.postalCode)}
             </h1>
             <p className="sh-status-meta">{propertyLine}</p>
 
@@ -128,7 +129,7 @@ export default async function CapturePage({ params }: { params: Promise<{ id: st
       inspectionId={id}
       lang={lang}
       tier={inspection.tier}
-      address={`${inspection.address}, ${inspection.postalCode}`}
+      address={formatAddress(inspection.address, inspection.postalCode)}
       propertyLine={propertyLine}
       items={items}
       focusNotes={notes.filter((n) => n.itemKeys.length === 0).map((n) => n.text[lang])}

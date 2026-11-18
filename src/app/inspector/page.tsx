@@ -7,6 +7,7 @@ import { getBundle, listInspections } from "@/lib/repo";
 import { activeFindings } from "@/lib/report";
 import { getLang, isInspector } from "@/lib/server/session";
 import type { InspectionStatus } from "@/lib/types";
+import { postcodeWithTown } from "@/lib/postcodes";
 
 const ORDER: Record<InspectionStatus, number> = { in_review: 0, capturing: 1, ai_report: 2, verified: 3 };
 const STAT_ICON: Record<InspectionStatus, string> = {
@@ -99,7 +100,7 @@ export default async function InspectorHome() {
                       <td data-label={t.fAddress}>
                         <div className="rp-qtable__addr">{i.address}</div>
                         <div className="rp-qtable__sub">
-                          {i.postalCode} · {TIER_LABEL[i.tier][lang]}
+                          {postcodeWithTown(i.postalCode)} · {TIER_LABEL[i.tier][lang]}
                         </div>
                       </td>
                       <td data-label={t.fPropertyType}>

@@ -337,6 +337,15 @@ const is = {
   rpQueueLead: "Skoðanir sem bíða yfirferðar eru efstar.",
   rpNegDetails: "Nánari upplýsingar",
   rpBuyerNote: "Athugasemd kaupanda",
+  // address suggestions
+  addrHelp: "Byrjaðu að skrifa og veldu heimilisfangið úr listanum.",
+  addrListLabel: "Tillögur að heimilisföngum",
+  addrStreet: "Gata",
+  addrPickNumber: "Veldu húsnúmer eða skrifaðu það inn.",
+  addrNoMatch: "Ekkert heimilisfang fannst. Þú getur samt skrifað það inn.",
+  addrCountOne: "1 tillaga",
+  addrCountMany: "{n} tillögur",
+  addrSource: "Heimild: Staðfangaskrá HMS",
 };
 
 export type Dict = { [K in keyof typeof is]: string };
@@ -672,6 +681,15 @@ const en: Dict = {
   rpQueueLead: "Inspections awaiting review are listed first.",
   rpNegDetails: "Details",
   rpBuyerNote: "Note from the buyer",
+  // address suggestions
+  addrHelp: "Start typing and pick the address from the list.",
+  addrListLabel: "Address suggestions",
+  addrStreet: "Street",
+  addrPickNumber: "Pick or type the house number.",
+  addrNoMatch: "No matching address. You can still type it in.",
+  addrCountOne: "1 suggestion",
+  addrCountMany: "{n} suggestions",
+  addrSource: "Source: HMS address register (Staðfangaskrá)",
 };
 
 export const DICTS: Record<Lang, Dict> = { is, en };

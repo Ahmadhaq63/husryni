@@ -36,6 +36,7 @@ import {
 import { drawingArchive } from "@/lib/municipal";
 import { buildReport, type ItemSection } from "@/lib/report";
 import type { FollowUp, InspectionBundle, Lang } from "@/lib/types";
+import { formatAddress } from "@/lib/postcodes";
 
 const pct = (part: number, whole: number) => `${((part / whole) * 100).toFixed(1)} %`;
 
@@ -141,7 +142,7 @@ export default function ReportView({ bundle }: { bundle: InspectionBundle }) {
           <div className="rp-head__main">
             <div className="eyebrow">{t.reportTitle}</div>
             <h1 className="rp-title">
-              {inspection.address}, {inspection.postalCode}
+              {formatAddress(inspection.address, inspection.postalCode)}
             </h1>
             <div className="rp-head__chips">
               <StatusChip status={inspection.status} lang={lang} />

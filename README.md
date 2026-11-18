@@ -15,6 +15,7 @@ The pattern is the same one Nestic uses for move-out cleaning: guided photo capt
 ```bash
 npm install
 [ -f .env.local ] || cp .env.local.example .env.local   # first time only, never overwrites your key; then edit it
+npm run addresses                                   # once: address suggestions (downloads the official register, 1–2 min)
 npm run dev                                         # http://localhost:3000
 ```
 
@@ -57,6 +58,16 @@ This feature adapts the "who fixes it" step of Nestic's maintenance protocol to 
   - for repairs, upload **after photos**. Claude compares them with the inspection's before photos and returns fixed / partially / not fixed / can't tell. It refuses to judge photos of a different spot and flags cosmetic cover-ups.
 - **A printable request document** for the realtor is at `/inspections/<id>/negotiate/document`.
 
+## Address suggestions
+
+The order form suggests addresses as you type, from **Staðfangaskrá**, Iceland's official address register (HMS, open data under CC BY 4.0, credited in the suggestion list).
+
+- `npm run addresses` ([scripts/build-addresses.ts](scripts/build-addresses.ts)) downloads the register (38 MB CSV, refreshed daily by HMS) and builds `data/addresses.db`: about 134,000 addresses on 20,000 streets, without roads, substations, playgrounds and other non-buildings. Re-run it now and then; the running app picks up the new file by itself.
+- `GET /api/addresses?q=…` searches that local copy ([src/lib/addressIndex.ts](src/lib/addressIndex.ts)), so what people type never leaves the server. Matching ignores case and accents and accepts `th`/`d`/`ae`/`o` for `þ`/`ð`/`æ`/`ö`.
+- Typing a street name lists streets. Picking one fills the postcode and lists its house numbers, and picking an address fills both fields. Any address can still be typed in by hand, for example a new build that isn't in the register yet.
+- Towns come from Pósturinn's postcode list ([src/lib/postcodes.ts](src/lib/postcodes.ts)), so addresses read as "Laugavegur 1, 101 Reykjavík" throughout the app.
+- Without the index, the field is a plain text box and everything else works.
+
 ## How the AI part works
 
 - **One request per checklist item** ([src/lib/ai/claude.ts](src/lib/ai/claude.ts)). Each request carries the photos, numbered, plus the property context, era-specific risk patterns ([src/lib/checklist.ts](src/lib/checklist.ts)) and the owner's notes.
@@ -89,8 +100,11 @@ src/
     report.ts             report aggregation, submit readiness
     repo.ts / db.ts       SQLite (better-sqlite3) data access + migrations
     storage.ts            local photo storage + file-type sniffing
+    addressIndex.ts       address register: index builder + search (shared with the script)
+    postcodes.ts          postcode → town, address formatting
     ai/                   prompt, schema, Claude client, demo analyser
-tests/                    Vitest: checklist, AI mapping, full flow on a temp DB
+scripts/build-addresses.ts  downloads the address register and builds data/addresses.db
+tests/                    Vitest: checklist, AI mapping, addresses, full flow on a temp DB
 docs/business-plan.md     research, competitors, pricing, go-to-market
 ```
 
@@ -98,6 +112,7 @@ docs/business-plan.md     research, competitors, pricing, go-to-market
 
 ```bash
 npm test            # unit + flow tests (demo engine, temp database)
+npm run addresses   # (re)build the address index from the official register
 npm run typecheck
 npm run build && npm start
 ```
@@ -114,4 +129,5 @@ These are deliberate prototype shortcuts:
   - A data processing agreement (DPA) and a GDPR data-protection impact assessment (DPIA) covering AI processing of photos.
   - Inspectors' professional liability insurance.
 - **Payments**, **email notifications**, **rate limiting** and **CSRF tokens** on inspector actions.
+- **Address register refresh.** Run `npm run addresses` on a schedule (weekly is plenty) so new builds show up.
 - **Accuracy.** Build an evaluation set of real, inspector-graded photos before trusting the grades, and tune prompts against it.

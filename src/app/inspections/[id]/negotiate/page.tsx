@@ -15,6 +15,7 @@ import {
 import { ensureNegotiation, fixItemKey, listRemedies } from "@/lib/negotiationRepo";
 import { getBundle } from "@/lib/repo";
 import { getLang } from "@/lib/server/session";
+import { formatAddress } from "@/lib/postcodes";
 
 export default async function NegotiatePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -79,7 +80,7 @@ export default async function NegotiatePage({ params }: { params: Promise<{ id: 
           <div className="rp-head__main">
             <div className="eyebrow">{t.negTitle}</div>
             <h1 className="rp-title">
-              {inspection.address}, {inspection.postalCode}
+              {formatAddress(inspection.address, inspection.postalCode)}
             </h1>
             <p className="rp-lead">{t.negLead}</p>
           </div>

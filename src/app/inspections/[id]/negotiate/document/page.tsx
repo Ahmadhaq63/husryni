@@ -10,6 +10,7 @@ import { computeTotals, estimateIsk, LEGAL_REFERENCE, negotiableFindings, negoti
 import { getNegotiation, listRemedies } from "@/lib/negotiationRepo";
 import { getBundle } from "@/lib/repo";
 import type { RemedyAction } from "@/lib/types";
+import { formatAddress } from "@/lib/postcodes";
 
 const ORDER: RemedyAction[] = ["seller_fix", "price_reduction", "hoa", "accept"];
 
@@ -60,7 +61,7 @@ export default async function NegotiationDocument({ params }: { params: Promise<
             <div>
               <dt>{t.fAddress}</dt>
               <dd>
-                {inspection.address}, {inspection.postalCode}
+                {formatAddress(inspection.address, inspection.postalCode)}
               </dd>
             </div>
             {inspection.fastanumer && (

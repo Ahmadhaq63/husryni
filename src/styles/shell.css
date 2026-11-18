@@ -2647,3 +2647,115 @@ main:has(> .sh-landing) + .sh-footer {
     display: none;
   }
 }
+
+/* ---------- Address suggestions (AddressAutocomplete) ---------- */
+.addr-ac {
+  position: relative;
+}
+.addr-ac .form-control {
+  scroll-margin-top: calc(var(--sh-nav-h, 64px) + 16px);
+}
+.addr-ac-pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.addr-ac-list {
+  max-height: min(360px, 52vh);
+  margin: 0;
+  padding: 6px;
+  overflow-y: auto;
+  list-style: none;
+}
+.addr-ac-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  cursor: pointer;
+}
+.addr-ac-option:hover {
+  background: var(--surface-2);
+}
+.addr-ac-option.is-active {
+  background: var(--brand-50);
+  box-shadow: inset 0 0 0 1px var(--brand-100);
+}
+.addr-ac-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--surface-3);
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+.addr-ac-option.is-active .addr-ac-icon {
+  background: var(--brand-100);
+  color: var(--brand);
+}
+.addr-ac-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.3;
+}
+.addr-ac-main {
+  overflow: hidden;
+  color: var(--ink);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.addr-ac-sub {
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+.addr-ac-mark {
+  padding: 0;
+  background: none;
+  color: inherit;
+  font-weight: 700;
+}
+.addr-ac-more {
+  color: var(--muted);
+}
+.addr-ac-hint,
+.addr-ac-empty {
+  margin: 0;
+  padding: 12px 16px;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+.addr-ac-hint {
+  padding-bottom: 2px;
+  color: var(--brand-900);
+  font-weight: 550;
+}
+.addr-ac-source {
+  margin: 0;
+  padding: 7px 16px;
+  border-top: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+.sh-order .sh-town {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--brand-700);
+}

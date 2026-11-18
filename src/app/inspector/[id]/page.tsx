@@ -9,6 +9,7 @@ import { CONSTRUCTION_LABEL, GRADE_INFO, HEATING_LABEL, PROPERTY_TYPE_LABEL, PUR
 import { getBundle } from "@/lib/repo";
 import { buildReport } from "@/lib/report";
 import { getLang, isInspector } from "@/lib/server/session";
+import { formatAddress } from "@/lib/postcodes";
 
 export default async function ReviewPage({ params }: { params: Promise<{ id: string }> }) {
   if (!(await isInspector())) redirect("/inspector");
@@ -35,7 +36,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
               </span>
               <div className="eyebrow">{t.reviewTitle}</div>
               <h1 className="rp-empty__title">
-                {inspection.address}, {inspection.postalCode}
+                {formatAddress(inspection.address, inspection.postalCode)}
               </h1>
               <StatusChip status={inspection.status} lang={lang} />
               <p className="rp-empty__text">{t.lockedVerified}</p>
@@ -83,7 +84,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
           <div className="rp-head__main">
             <div className="eyebrow">{t.reviewTitle}</div>
             <h1 className="rp-title">
-              {inspection.address}, {inspection.postalCode}
+              {formatAddress(inspection.address, inspection.postalCode)}
             </h1>
             <div className="rp-head__meta">
               <span>

@@ -12,6 +12,7 @@ import { fixItemKey, getNegotiationByToken, listRemedies } from "@/lib/negotiati
 import { getBundle } from "@/lib/repo";
 import { getLang } from "@/lib/server/session";
 import type { RemedyAction } from "@/lib/types";
+import { formatAddress } from "@/lib/postcodes";
 
 const ORDER: RemedyAction[] = ["seller_fix", "price_reduction", "hoa", "accept"];
 const ACTION_ICON: Record<RemedyAction, string> = {
@@ -44,7 +45,7 @@ export default async function SellerPage({ params }: { params: Promise<{ token: 
           <div className="rp-head__main">
             <div className="eyebrow">{t.sellerTitle}</div>
             <h1 className="rp-title">
-              {inspection.address}, {inspection.postalCode}
+              {formatAddress(inspection.address, inspection.postalCode)}
             </h1>
             <p className="rp-lead">{t.sellerLead}</p>
           </div>
