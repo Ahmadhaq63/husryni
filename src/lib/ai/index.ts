@@ -3,10 +3,28 @@ import { getCost } from "../costs";
 import { getBundle, getInspection, getItem, getPhoto, listItemPhotos, saveItemAnalysis, saveSummary, setPhotoCheck, type NewFinding } from "../repo";
 import { readPhotoFile } from "../storage";
 import type { InspectionSummaryAI, ItemAnalysisRecord } from "../types";
-import { AiError, claudeAnalyzeItem, claudeCheckPhoto, claudeModel, claudeSummarize, claudeVerifyFix, type ImageInput } from "./claude";
-import { mockAnalyzeItem, mockSummarize, mockVerifyFix } from "./mock";
-import { fixTaskText, itemTaskText, photoCheckText, summaryTaskText } from "./prompt";
-import type { FixCheck, ItemAnalysis } from "./schema";
+import {
+  AiError,
+  claudeAnalyzeItem,
+  claudeAsk,
+  claudeCheckFollowUp,
+  claudeCheckPhoto,
+  claudeModel,
+  claudeSummarize,
+  claudeTriage,
+  claudeVerifyFix,
+  type ChatTurn,
+  type ImageInput,
+} from "./claude";
+import { assistantContext, mockAnswer } from "./assistant";
+import { propertyContext } from "./prompt";
+import { ruleTriage, type Triage } from "../ownerTools";
+import { mockAnalyzeItem, mockCheckFollowUp, mockSummarize, mockVerifyFix } from "./mock";
+import { fixTaskText, followUpTaskText, itemTaskText, photoCheckText, summaryTaskText } from "./prompt";
+import type { FixCheck, FollowUpCheck, ItemAnalysis } from "./schema";
+import { followUpPhotoKey } from "../annual";
+import { followUpTarget, setFollowUpVerdict } from "../annualRepo";
+import type { FollowUpVerdict } from "../types";
 import { fixItemKey, getRemedy, setFixStatus } from "../negotiationRepo";
 import type { FixVerdict, Photo } from "../types";
 
@@ -27,6 +45,9 @@ export function toNewFindings(analysis: ItemAnalysis, photoIds: string[]): NewFi
   return analysis.findings.map((f) => ({
     title: f.title.trim(),
     description: f.description.trim(),
+    // The standard asks for these on TG2/TG3 only; anything the model wrote for lower grades is dropped.
+    cause: f.grade === "TG2" || f.grade === "TG3" ? f.cause.trim() : "",
+    consequence: f.grade === "TG2" || f.grade === "TG3" ? f.consequence.trim() : "",
     grade: f.grade,
     confidence: f.confidence,
     photoIds: [...new Set(f.photo_numbers)]
@@ -183,6 +204,62 @@ export async function verifyFix(inspectionId: string, findingId: string): Promis
 }
 
 /**
+ * Yearly check: compare the photos of a recorded defect (BEFORE) with the owner's new photos (AFTER).
+ * The verdict is stored with the follow-up; the owner's own answer stays as given.
+ */
+export async function checkFollowUp(annualId: string, findingId: string): Promise<FollowUpVerdict> {
+  const target = followUpTarget(annualId, findingId);
+  if (!target) throw new Error("not found");
+  const { annual, fu, finding } = target;
+  const after = listItemPhotos(annualId, followUpPhotoKey(findingId));
+  if (after.length === 0) {
+    throw new AiError("no after photos", { is: "Taktu fyrst mynd af staðnum eins og hann er núna.", en: "Take a photo of the spot as it is now first." });
+  }
+  // BEFORE: the photos the finding points at, or the whole item's photos in the inspection that recorded it.
+  const before: Photo[] = finding.photoIds.length
+    ? finding.photoIds.map((id) => getPhoto(id)).filter((p): p is Photo => !!p)
+    : listItemPhotos(finding.inspectionId, finding.itemKey);
+
+  const engine = aiEngine();
+  let check: FollowUpCheck;
+  let model = "demo";
+  if (engine === "claude") {
+    const load = async (p: Photo): Promise<ImageInput> => ({
+      mime: p.mime as ImageInput["mime"],
+      base64: (await readPhotoFile(p.inspectionId, p.id, p.mime)).toString("base64"),
+    });
+    const task = followUpTaskText({
+      inspection: annual,
+      finding,
+      itemTitle: getTemplate(finding.itemKey)?.title.en ?? finding.itemKey,
+      beforeCount: before.length,
+      afterCount: after.length,
+      ownerAnswer: fu.answer,
+      ownerNote: fu.note,
+    });
+    const r = await claudeCheckFollowUp(await Promise.all(before.map(load)), await Promise.all(after.map(load)), task);
+    check = r.output;
+    model = r.model;
+  } else {
+    check = mockCheckFollowUp(annual.lang, after.length, fu.answer);
+  }
+
+  const verdict: FollowUpVerdict = {
+    engine,
+    model,
+    // A verdict for a different spot is no verdict.
+    verdict: check.same_location === "no" ? "cannot_tell" : check.verdict,
+    explanation: check.explanation,
+    retakeRequests: check.retake_requests.map((r) => ({ photoNumber: r.photo_number, reason: r.reason })),
+    checkedAt: new Date().toISOString(),
+  };
+  if (!setFollowUpVerdict(annualId, findingId, verdict)) {
+    throw new AiError("check closed", { is: "Árlega skoðunin hefur þegar verið send.", en: "The yearly check has already been submitted." });
+  }
+  return verdict;
+}
+
+/**
  * Fast usability check right after upload (cheap model). Best effort: any failure leaves
  * the photo "unchecked" and never blocks the user. Demo mode skips the check.
  */
@@ -207,6 +284,41 @@ export async function checkPhoto(photoId: string): Promise<{ status: Photo["chec
     console.error(`[photo-check] ${photoId}`, err instanceof Error ? err.message : err);
     return { status: "unchecked", reason: null };
   }
+}
+
+/** Answer the owner's question about a property from its report and history (or the demo rules). */
+export async function askAssistant(rootId: string, turns: ChatTurn[]): Promise<{ answer: string; engine: Engine; usage?: { inputTokens: number; outputTokens: number } }> {
+  const ctx = assistantContext(rootId);
+  if (!ctx) throw new Error("not found");
+  const question = turns[turns.length - 1]?.text ?? "";
+  if (aiEngine() !== "claude") return { answer: mockAnswer(question, ctx.facts), engine: "mock" };
+  const r = await claudeAsk(ctx.text, turns);
+  return { answer: r.output, engine: "claude", usage: r.usage };
+}
+
+/** Who to call, how fast and what to do now, for a problem the owner reports between checks. */
+export async function triageProblem(rootId: string, text: string): Promise<Triage> {
+  const inspection = getInspection(rootId);
+  if (!inspection) throw new Error("not found");
+  if (aiEngine() !== "claude") return { engine: "mock", ...ruleTriage(text, inspection.lang) };
+  const r = await claudeTriage(
+    [
+      `Report language: ${inspection.lang === "is" ? "Icelandic (íslenska)" : "English"}`,
+      propertyContext(inspection),
+      `The owner reports: "${text}"`,
+      "Triage this problem now.",
+    ].join("\n\n"),
+  );
+  const o = r.output;
+  return {
+    engine: "claude",
+    category: o.category,
+    trade: o.trade,
+    urgency: o.urgency,
+    respondWithin: o.respond_within,
+    advice: o.immediate_advice.trim(),
+    itemKey: o.item_key === "none" ? null : o.item_key,
+  };
 }
 
 export { claudeModel };

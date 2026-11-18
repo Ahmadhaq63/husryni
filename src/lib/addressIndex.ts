@@ -30,6 +30,8 @@ export interface PlaceSuggestion {
   label: string;
   postcode: string;
   town: string;
+  /** The register's id for this address (HEINUM): identifies the building across reports. */
+  heinum: number | null;
 }
 
 export type AddressSuggestion = StreetSuggestion | PlaceSuggestion;
@@ -286,6 +288,7 @@ interface PlaceRow {
   label: string;
   postcode: string;
   town: string;
+  heinum: number | null;
 }
 
 const STREET_FILTERS = `
@@ -303,7 +306,7 @@ function prepare(db: Db) {
       ORDER BY MAX(k.is_full AND k.key = @street) DESC, MAX(k.is_full) DESC, s.addresses DESC, s.name, s.postcode
       LIMIT @limit`),
     numbers: db.prepare(`
-      SELECT a.label, s.postcode, s.town
+      SELECT a.label, s.postcode, s.town, a.heinum
       FROM street_keys k JOIN streets s ON s.id = k.street_id JOIN addresses a ON a.street_id = s.id
       WHERE ${STREET_FILTERS}
         AND a.number IS NOT NULL AND CAST(a.number AS TEXT) LIKE @number || '%'
@@ -314,7 +317,7 @@ function prepare(db: Db) {
       LIMIT @limit`),
     /** Every address on one street, numbers first: shown after a street is picked. */
     streetAddresses: db.prepare(`
-      SELECT a.label, s.postcode, s.town
+      SELECT a.label, s.postcode, s.town, a.heinum
       FROM streets s JOIN addresses a ON a.street_id = s.id
       WHERE s.id = ?
       ORDER BY a.number IS NULL, a.number, a.letter, a.extra
@@ -343,7 +346,7 @@ export function searchAddresses(db: Db, text: string, options: SearchOptions = {
 
   const limit = Math.min(Math.max(Math.trunc(options.limit ?? 8), 1), 20);
   const picked = options.postcode && /^\d{3}$/.test(options.postcode) ? options.postcode : null;
-  const place = (r: PlaceRow): PlaceSuggestion => ({ kind: "address", label: r.label, postcode: r.postcode, town: r.town });
+  const place = (r: PlaceRow): PlaceSuggestion => ({ kind: "address", label: r.label, postcode: r.postcode, town: r.town, heinum: r.heinum ?? null });
 
   // A street named in full in a known postcode: the one just picked, or typed with its postcode after a comma.
   const pc = q.postcode ?? picked;

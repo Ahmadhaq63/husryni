@@ -8,6 +8,8 @@ const costKey = z.string().refine((k) => k === "none" || (COST_KEYS as string[])
 export const FindingPatchBody = z.object({
   title: z.string().trim().min(1).max(200).optional(),
   description: z.string().trim().max(2000).optional(),
+  cause: z.string().trim().max(1000).optional(),
+  consequence: z.string().trim().max(1000).optional(),
   grade: z.enum(GRADES).optional(),
   recommendedAction: z.string().trim().max(1000).optional(),
   followUp: z.enum(FOLLOW_UPS).optional(),
@@ -21,6 +23,8 @@ export const NewFindingBody = z.object({
   itemKey: z.string().min(1).max(64),
   title: z.string().trim().min(1).max(200),
   description: z.string().trim().max(2000),
+  cause: z.string().trim().max(1000).default(""),
+  consequence: z.string().trim().max(1000).default(""),
   grade: z.enum(GRADES),
   recommendedAction: z.string().trim().max(1000),
   followUp: z.enum(FOLLOW_UPS),

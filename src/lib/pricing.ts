@@ -5,6 +5,8 @@ export interface PricePlan {
   key: "basic" | "verified" | "agency";
   name: L10n;
   price: L10n;
+  /** The fixed fee in ISK incl. VAT (null when quoted). Printed on signed reports: it does not depend on the result. */
+  amountIsk: number | null;
   per: L10n;
   features: L10n[];
   highlighted?: boolean;
@@ -15,6 +17,7 @@ export const PLANS: PricePlan[] = [
     key: "basic",
     name: { is: "Grunnskýrsla", en: "Basic report" },
     price: { is: "19.900 kr.", en: "ISK 19,900" },
+    amountIsk: 19_900,
     per: { is: "á eign", en: "per property" },
     features: [
       { is: "Gátlisti sniðinn að eigninni", en: "Checklist tailored to the property" },
@@ -28,6 +31,7 @@ export const PLANS: PricePlan[] = [
     key: "verified",
     name: { is: "Staðfest skýrsla", en: "Verified report" },
     price: { is: "49.900 kr.", en: "ISK 49,900" },
+    amountIsk: 49_900,
     per: { is: "á eign", en: "per property" },
     highlighted: true,
     features: [
@@ -41,6 +45,7 @@ export const PLANS: PricePlan[] = [
     key: "agency",
     name: { is: "Fasteignasölur", en: "Real estate agencies" },
     price: { is: "Tilboð", en: "Quote" },
+    amountIsk: null,
     per: { is: "magnverð á skráningu", en: "volume price per listing" },
     features: [
       { is: "Staðfest skýrsla með hverri sölu", en: "A verified report with every listing" },
@@ -50,3 +55,6 @@ export const PLANS: PricePlan[] = [
     ],
   },
 ];
+
+/** The fixed fee for a tier (null when it is quoted per agreement). */
+export const feeForTier = (tier: "basic" | "verified") => PLANS.find((p) => p.key === tier)?.amountIsk ?? null;

@@ -14,6 +14,8 @@ const CreateBody = z.object({
     .transform((s) => (s === "" ? null : s.startsWith("F") ? s : `F${s}`))
     .nullable()
     .optional(),
+  /** Address register id (HEINUM) of a picked address. */
+  heinum: z.number().int().positive().max(2_147_483_647).nullable().optional(),
   propertyType: z.enum(PROPERTY_TYPES),
   buildYear: z.coerce
     .number()
@@ -49,8 +51,8 @@ export async function POST(req: Request) {
       { status: 400 },
     );
   }
-  const { consent: _consent, fastanumer, priceIsk, ...rest } = parsed.data;
+  const { consent: _consent, fastanumer, priceIsk, heinum, ...rest } = parsed.data;
   if (!_consent) return fail(400, "consent required");
-  const id = createInspection({ ...rest, fastanumer: fastanumer ?? null, priceIsk: priceIsk ?? null });
+  const id = createInspection({ ...rest, fastanumer: fastanumer ?? null, heinum: heinum ?? null, priceIsk: priceIsk ?? null });
   return Response.json({ id }, { status: 201 });
 }

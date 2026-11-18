@@ -17,11 +17,13 @@ function load(findingId: string): Loaded {
 export async function PATCH(req: Request, ctx: { params: Promise<{ findingId: string }> }) {
   if (!(await isInspector())) return fail(401, UNAUTHORIZED);
   const { findingId } = await ctx.params;
+  // Body first: from the status check to the write there must be no await, or a signing could slip in between.
+  const body = await readJson(req);
   const loaded = load(findingId);
   if ("error" in loaded) return loaded.error;
   const { finding } = loaded;
 
-  const parsed = FindingPatchBody.safeParse(await readJson(req));
+  const parsed = FindingPatchBody.safeParse(body);
   if (!parsed.success) return fail(400, "invalid body");
   const patch = parsed.data;
 

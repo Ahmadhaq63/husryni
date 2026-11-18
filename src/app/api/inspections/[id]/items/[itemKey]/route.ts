@@ -5,6 +5,8 @@ import { fail, LOCKED, NOT_FOUND, readJson } from "@/lib/server/http";
 const PatchBody = z.object({
   notes: z.string().max(2000).optional(),
   notAccessible: z.boolean().optional(),
+  /** Why the item can't be assessed (required before submitting when notAccessible). */
+  naReason: z.string().trim().max(500).optional(),
 });
 
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string; itemKey: string }> }) {

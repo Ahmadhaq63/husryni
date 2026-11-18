@@ -1,16 +1,28 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
-import { FIX_SYSTEM_PROMPT, ITEM_SYSTEM_PROMPT, PHOTO_CHECK_SYSTEM_PROMPT, SUMMARY_SYSTEM_PROMPT } from "./prompt";
+import {
+  ASSISTANT_SYSTEM_PROMPT,
+  FIX_SYSTEM_PROMPT,
+  FOLLOWUP_SYSTEM_PROMPT,
+  ITEM_SYSTEM_PROMPT,
+  PHOTO_CHECK_SYSTEM_PROMPT,
+  SUMMARY_SYSTEM_PROMPT,
+  TRIAGE_SYSTEM_PROMPT,
+} from "./prompt";
 import {
   FixCheckSchema,
+  FollowUpCheckSchema,
   ItemAnalysisSchema,
   PhotoCheckSchema,
   SummarySchema,
+  TriageSchema,
   type FixCheck,
+  type FollowUpCheck,
   type ItemAnalysis,
   type PhotoCheck,
   type SummaryOutput,
+  type TriageOutput,
 } from "./schema";
 
 type Effort = "low" | "medium" | "high" | "xhigh" | "max";
@@ -191,6 +203,43 @@ export async function claudeVerifyFix(before: ImageInput[], after: ImageInput[],
   }
 }
 
+/** Yearly check: compare the report's BEFORE photos of a defect with the owner's AFTER photos. */
+export async function claudeCheckFollowUp(before: ImageInput[], after: ImageInput[], taskText: string): Promise<ClaudeResult<FollowUpCheck>> {
+  const content: Anthropic.Beta.BetaContentBlockParam[] = [];
+  before.forEach((img, i) => {
+    content.push({ type: "text", text: `BEFORE photo ${i + 1}:` });
+    content.push({ type: "image", source: { type: "base64", media_type: img.mime, data: img.base64 } });
+  });
+  after.forEach((img, i) => {
+    content.push({ type: "text", text: `AFTER photo ${i + 1}:` });
+    content.push({ type: "image", source: { type: "base64", media_type: img.mime, data: img.base64 } });
+  });
+  content.push({ type: "text", text: taskText });
+
+  try {
+    const response = await getClient().beta.messages.parse({
+      model: claudeModel(),
+      max_tokens: 16000,
+      output_config: { effort: claudeEffort(), format: betaZodOutputFormat(FollowUpCheckSchema) },
+      betas: ["server-side-fallback-2026-07-01"],
+      fallbacks: "default",
+      system: [{ type: "text", text: FOLLOWUP_SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
+      messages: [{ role: "user", content }],
+    });
+    checkStop(response.stop_reason);
+    if (!response.parsed_output) {
+      throw new AiError("unparseable output", { is: "Samanburður skilaði ógildu svari. Reyndu aftur.", en: "The comparison returned an invalid answer. Try again." }, true);
+    }
+    return {
+      output: response.parsed_output,
+      model: response.model,
+      usage: { inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens },
+    };
+  } catch (err) {
+    translateError(err);
+  }
+}
+
 /**
  * Instant usability check of one photo with the fast model. Returns null when the
  * check can't be completed (refusal, truncation) so the caller simply skips it.
@@ -218,6 +267,63 @@ export async function claudeCheckPhoto(img: ImageInput, taskText: string): Promi
       model: response.model,
       usage: { inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens },
     };
+  } catch (err) {
+    translateError(err);
+  }
+}
+
+export interface ChatTurn {
+  role: "user" | "assistant";
+  text: string;
+}
+
+/**
+ * Answer a question about one property. The rules and the property's data are two cached system blocks, so
+ * follow-up questions about the same report only pay for the new turn.
+ */
+export async function claudeAsk(context: string, turns: ChatTurn[]): Promise<ClaudeResult<string>> {
+  try {
+    const response = await getClient().messages.create({
+      model: claudeModel(),
+      max_tokens: 4000,
+      output_config: { effort: "low" },
+      system: [
+        { type: "text", text: ASSISTANT_SYSTEM_PROMPT },
+        { type: "text", text: context, cache_control: { type: "ephemeral" } },
+      ],
+      messages: turns.map((m) => ({ role: m.role, content: m.text })),
+    });
+    checkStop(response.stop_reason);
+    const text = response.content
+      .filter((b): b is Anthropic.TextBlock => b.type === "text")
+      .map((b) => b.text)
+      .join("\n")
+      .trim();
+    if (!text) throw new AiError("empty answer", { is: "Ekkert svar barst. Reyndu aftur.", en: "No answer came back. Try again." }, true);
+    const u = response.usage;
+    // Cached context is billed separately (cache writes and reads): count it, so the log shows what a question really used.
+    const inputTokens = u.input_tokens + (u.cache_creation_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0);
+    return { output: text, model: response.model, usage: { inputTokens, outputTokens: u.output_tokens } };
+  } catch (err) {
+    translateError(err);
+  }
+}
+
+/** Triage a reported problem (structured). */
+export async function claudeTriage(taskText: string): Promise<ClaudeResult<TriageOutput>> {
+  try {
+    const response = await getClient().messages.parse({
+      model: claudeModel(),
+      max_tokens: 4000,
+      output_config: { effort: "low", format: zodOutputFormat(TriageSchema) },
+      system: [{ type: "text", text: TRIAGE_SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
+      messages: [{ role: "user", content: taskText }],
+    });
+    checkStop(response.stop_reason);
+    if (!response.parsed_output) {
+      throw new AiError("unparseable output", { is: "Flokkun mistókst. Reyndu aftur.", en: "Triage failed. Try again." }, true);
+    }
+    return { output: response.parsed_output, model: response.model, usage: { inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens } };
   } catch (err) {
     translateError(err);
   }

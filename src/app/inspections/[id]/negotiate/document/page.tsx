@@ -20,7 +20,7 @@ export default async function NegotiationDocument({ params }: { params: Promise<
   const bundle = getBundle(id);
   if (!bundle) notFound();
   const { inspection } = bundle;
-  if (!negotiationOpen(inspection.status)) redirect(`/inspections/${id}`);
+  if (!negotiationOpen(inspection.status, inspection.kind)) redirect(`/inspections/${id}`);
 
   const lang = inspection.lang;
   const t = getDict(lang);

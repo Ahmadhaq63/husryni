@@ -28,7 +28,7 @@ export default async function SellerPage({ params }: { params: Promise<{ token: 
   const { token } = await params;
   const negotiation = getNegotiationByToken(token);
   const bundle = negotiation ? getBundle(negotiation.inspectionId) : null;
-  if (!negotiation || !bundle || !negotiationOpen(bundle.inspection.status)) notFound();
+  if (!negotiation || !bundle || !negotiationOpen(bundle.inspection.status, bundle.inspection.kind)) notFound();
 
   const lang = await getLang();
   const t = getDict(lang);

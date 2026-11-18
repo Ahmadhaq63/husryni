@@ -1,6 +1,7 @@
 import { baselineRecommendations, getTemplate, type ItemTemplate } from "./checklist";
 import { getCost } from "./costs";
 import { GRADE_INFO } from "./labels";
+import { notAssessedItem, overallGrade, overallItemOf, systemStatuses, type OverallResult, type SystemStatus } from "./standard";
 import type { Finding, FollowUp, Grade, InspectionBundle, InspectionItem, L10n } from "./types";
 import { GRADES } from "./types";
 
@@ -50,6 +51,10 @@ export interface ReportModel {
   costMax: number;
   completeness: { required: number; done: number; skipped: number; pending: number; percent: number };
   usedMock: boolean;
+  /** Overall grade by the published rule (src/lib/standard.ts), computed from the current findings. */
+  overall: OverallResult;
+  /** The ten building systems with a traffic light each. */
+  systems: SystemStatus[];
 }
 
 export function isRequired(template: ItemTemplate | undefined) {
@@ -118,13 +123,26 @@ export function buildReport(bundle: InspectionBundle): ReportModel {
       percent: required.length ? Math.round(((done + skipped) / required.length) * 100) : 100,
     },
     usedMock: bundle.items.some((i) => i.analysis?.engine === "mock"),
+    overall: overallGrade(sections.map((s) => overallItemOf(s.item.itemKey, s.item.status === "skipped", s.findings))),
+    systems: systemStatuses(
+      sections.map((s) => ({
+        itemKey: s.item.itemKey,
+        skipped: notAssessedItem(s.item.status === "skipped", s.findings),
+        analyzed: s.item.status === "analyzed",
+        worst: s.worst,
+        findingTitles: s.findings.filter((f) => f.grade === "TG2" || f.grade === "TG3").map((f) => f.title),
+      })),
+    ),
   };
 }
 
-/** Every required item must be analysed or marked not accessible before submitting. */
-export function readyToSubmit(bundle: InspectionBundle): { ok: boolean; missing: string[] } {
-  const missing = bundle.items
-    .filter((i) => isRequired(getTemplate(i.itemKey)) && i.status === "pending")
-    .map((i) => i.itemKey);
-  return { ok: missing.length === 0, missing };
+/**
+ * Every required item must be analysed, or marked not accessible with a reason, before submitting.
+ * `missing` lists both kinds; `missingReason` only the items that still need a reason.
+ */
+export function readyToSubmit(bundle: InspectionBundle): { ok: boolean; missing: string[]; missingReason: string[] } {
+  const required = bundle.items.filter((i) => isRequired(getTemplate(i.itemKey)));
+  const missingReason = required.filter((i) => i.status === "skipped" && !i.naReason.trim()).map((i) => i.itemKey);
+  const missing = required.filter((i) => i.status === "pending").map((i) => i.itemKey);
+  return { ok: missing.length === 0 && missingReason.length === 0, missing: [...missing, ...missingReason], missingReason };
 }

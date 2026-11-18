@@ -1,3 +1,4 @@
+import { photosChanged } from "@/lib/annualRepo";
 import { deletePhoto, getInspection, getPhoto } from "@/lib/repo";
 import { fail, LOCKED, NOT_FOUND } from "@/lib/server/http";
 import { deletePhotoFile, readPhotoFile } from "@/lib/storage";
@@ -30,6 +31,8 @@ export async function DELETE(_req: Request, ctx: { params: Promise<{ photoId: st
   const inspection = getInspection(photo.inspectionId);
   if (!inspection || inspection.status !== "capturing") return fail(409, LOCKED);
   deletePhoto(photo.id);
+  // A yearly check's follow-up photo: its comparison no longer describes the photos.
+  if (inspection.kind === "annual") photosChanged(inspection.id, photo.itemKey);
   await deletePhotoFile(photo.inspectionId, photo.id, photo.mime);
   return new Response(null, { status: 204 });
 }

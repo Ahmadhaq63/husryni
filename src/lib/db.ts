@@ -124,6 +124,119 @@ const MIGRATIONS: string[] = [
   ALTER TABLE photos ADD COLUMN check_status TEXT NOT NULL DEFAULT 'unchecked';
   ALTER TABLE photos ADD COLUMN check_reason TEXT;
   `,
+  // 6: the report standard (src/lib/standard.ts): cause and consequence on findings, the AI's original
+  // grade (kept for AI–inspector agreement), a reason for every item not assessed, moisture readings as
+  // data, and what is fixed at signing: standard version, overall grade, fee, declaration and the seal.
+  `
+  ALTER TABLE findings ADD COLUMN cause TEXT NOT NULL DEFAULT '';
+  ALTER TABLE findings ADD COLUMN consequence TEXT NOT NULL DEFAULT '';
+  ALTER TABLE findings ADD COLUMN ai_grade TEXT;
+  -- Best effort for earlier AI findings: an edit may have changed the grade, so edited ones stay unknown.
+  UPDATE findings SET ai_grade = grade WHERE source = 'ai' AND review_status IN ('pending', 'confirmed', 'rejected');
+  ALTER TABLE items ADD COLUMN na_reason TEXT NOT NULL DEFAULT '';
+  ALTER TABLE inspections ADD COLUMN standard_version TEXT;
+  ALTER TABLE inspections ADD COLUMN overall_grade TEXT;
+  ALTER TABLE inspections ADD COLUMN fee_isk INTEGER;
+  ALTER TABLE inspections ADD COLUMN declared_at TEXT;
+  ALTER TABLE inspections ADD COLUMN report_hash TEXT;
+  CREATE UNIQUE INDEX inspections_by_report_hash ON inspections(report_hash) WHERE report_hash IS NOT NULL;
+
+  CREATE TABLE moisture_readings (
+    id TEXT PRIMARY KEY,
+    inspection_id TEXT NOT NULL REFERENCES inspections(id) ON DELETE CASCADE,
+    item_key TEXT,
+    room TEXT NOT NULL,
+    part TEXT NOT NULL,
+    value REAL NOT NULL,
+    method TEXT NOT NULL DEFAULT 'pin',
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX moisture_by_inspection ON moisture_readings(inspection_id, created_at);
+  `,
+  // 7: property history. Where the property is (address register id, besides the fastanúmer), and yearly
+  // owner checks: an inspection of kind 'annual' under the full report it follows up (parent_id), with an
+  // answer per open finding (fixed / unchanged / worse, optionally checked against photos) and per question.
+  `
+  ALTER TABLE inspections ADD COLUMN heinum INTEGER;
+  ALTER TABLE inspections ADD COLUMN parent_id TEXT REFERENCES inspections(id) ON DELETE CASCADE;
+  ALTER TABLE inspections ADD COLUMN kind TEXT NOT NULL DEFAULT 'full';
+  ALTER TABLE inspections ADD COLUMN completed_at TEXT;
+  CREATE INDEX inspections_by_parent ON inspections(parent_id, created_at);
+  CREATE INDEX inspections_by_fastanumer ON inspections(fastanumer) WHERE fastanumer IS NOT NULL;
+  CREATE INDEX inspections_by_heinum ON inspections(heinum) WHERE heinum IS NOT NULL;
+
+  CREATE TABLE followups (
+    inspection_id TEXT NOT NULL REFERENCES inspections(id) ON DELETE CASCADE,
+    finding_id TEXT NOT NULL REFERENCES findings(id) ON DELETE CASCADE,
+    position INTEGER NOT NULL,
+    answer TEXT,
+    note TEXT NOT NULL DEFAULT '',
+    verdict_json TEXT,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (inspection_id, finding_id)
+  );
+
+  CREATE TABLE annual_answers (
+    inspection_id TEXT NOT NULL REFERENCES inspections(id) ON DELETE CASCADE,
+    question_id TEXT NOT NULL,
+    answer TEXT,
+    note TEXT NOT NULL DEFAULT '',
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (inspection_id, question_id)
+  );
+  `,
+  // 8: owner tools. Read-only report links the owner can revoke (insurers, banks), repair quote drafts per
+  // trade, problems the owner reports between checks (with triage), and a log of questions to the assistant.
+  `
+  CREATE TABLE read_links (
+    token TEXT PRIMARY KEY,
+    inspection_id TEXT NOT NULL REFERENCES inspections(id) ON DELETE CASCADE,
+    audience TEXT NOT NULL,
+    label TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    revoked_at TEXT,
+    views INTEGER NOT NULL DEFAULT 0,
+    last_viewed_at TEXT
+  );
+  CREATE INDEX read_links_by_inspection ON read_links(inspection_id, created_at);
+
+  CREATE TABLE quotes (
+    id TEXT PRIMARY KEY,
+    inspection_id TEXT NOT NULL REFERENCES inspections(id) ON DELETE CASCADE,
+    number TEXT NOT NULL,
+    trade TEXT NOT NULL,
+    finding_ids TEXT NOT NULL DEFAULT '[]',
+    lines_json TEXT NOT NULL DEFAULT '[]',
+    status TEXT NOT NULL DEFAULT 'draft',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    approved_at TEXT
+  );
+  CREATE INDEX quotes_by_inspection ON quotes(inspection_id, created_at);
+
+  CREATE TABLE problem_reports (
+    id TEXT PRIMARY KEY,
+    inspection_id TEXT NOT NULL REFERENCES inspections(id) ON DELETE CASCADE,
+    text TEXT NOT NULL,
+    triage_json TEXT,
+    status TEXT NOT NULL DEFAULT 'open',
+    created_at TEXT NOT NULL,
+    resolved_at TEXT
+  );
+  CREATE INDEX problems_by_inspection ON problem_reports(inspection_id, created_at);
+
+  CREATE TABLE assistant_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    inspection_id TEXT NOT NULL REFERENCES inspections(id) ON DELETE CASCADE,
+    question TEXT NOT NULL,
+    answer TEXT NOT NULL,
+    engine TEXT NOT NULL,
+    input_tokens INTEGER,
+    output_tokens INTEGER,
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX assistant_by_inspection ON assistant_log(inspection_id, created_at);
+  `,
 ];
 
 function migrate(db: Database.Database) {
@@ -139,7 +252,7 @@ function migrate(db: Database.Database) {
 }
 
 // Reuse one connection across hot reloads in dev.
-const globalForDb = globalThis as unknown as { __husryniDb?: Database.Database };
+const globalForDb = globalThis as unknown as { __husryniDb?: Database.Database; __husryniDbVersion?: number };
 
 export function getDb(): Database.Database {
   if (!globalForDb.__husryniDb) {
@@ -148,8 +261,12 @@ export function getDb(): Database.Database {
     const db = new Database(path.join(dir, "husryni.db"));
     db.pragma("journal_mode = WAL");
     db.pragma("foreign_keys = ON");
-    migrate(db);
     globalForDb.__husryniDb = db;
+  }
+  // A hot reload can bring new migrations while the cached connection lives on: apply them too.
+  if (globalForDb.__husryniDbVersion !== MIGRATIONS.length) {
+    migrate(globalForDb.__husryniDb);
+    globalForDb.__husryniDbVersion = MIGRATIONS.length;
   }
   return globalForDb.__husryniDb;
 }

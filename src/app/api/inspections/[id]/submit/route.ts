@@ -9,13 +9,17 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string }>
   const { id } = await ctx.params;
   const bundle = getBundle(id);
   if (!bundle) return fail(404, NOT_FOUND);
-  if (bundle.inspection.status !== "capturing") return fail(409, LOCKED);
+  // A yearly check is submitted through its own route (answers, owner findings, completed_at).
+  if (bundle.inspection.kind !== "full" || bundle.inspection.status !== "capturing") return fail(409, LOCKED);
 
   const ready = readyToSubmit(bundle);
   if (!ready.ok) {
     return Response.json(
       {
-        error: { is: "Enn eru liðir óunnir.", en: "Some items are still open." },
+        error:
+          ready.missingReason.length === ready.missing.length
+            ? { is: "Skráðu ástæðu fyrir hvern lið sem er merktur óaðgengilegur.", en: "Give a reason for every item marked not accessible." }
+            : { is: "Enn eru liðir óunnir.", en: "Some items are still open." },
         missing: ready.missing,
       },
       { status: 400 },

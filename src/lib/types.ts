@@ -26,6 +26,10 @@ export const TIERS = ["basic", "verified"] as const;
 export type Tier = (typeof TIERS)[number];
 
 export const STATUSES = ["capturing", "in_review", "ai_report", "verified"] as const;
+
+/** full = a condition report; annual = the owner's yearly check that follows one up (status ai_report when done). */
+export const INSPECTION_KINDS = ["full", "annual"] as const;
+export type InspectionKind = (typeof INSPECTION_KINDS)[number];
 export type InspectionStatus = (typeof STATUSES)[number];
 
 export const FOLLOW_UPS = [
@@ -88,6 +92,20 @@ export interface Inspection extends PropertyProfile {
   inspectorStatement: string | null;
   signedAt: string | null;
   summary: InspectionSummaryAI | null;
+  /** Set at signing (see src/lib/standard.ts): the standard version, the overall grade by the published rule,
+   * the fixed fee, when the inspector made the independence declaration, and the SHA-256 seal of the report. */
+  standardVersion: string | null;
+  overallGrade: Grade | null;
+  feeIsk: number | null;
+  declaredAt: string | null;
+  reportHash: string | null;
+  /** Address register id (HEINUM) when the address was picked from the register. */
+  heinum: number | null;
+  kind: InspectionKind;
+  /** For a yearly check: the full report it follows up. */
+  parentId: string | null;
+  /** When a yearly check was submitted. */
+  completedAt: string | null;
 }
 
 export type ItemStatus = "pending" | "analyzed" | "skipped";
@@ -100,6 +118,8 @@ export interface InspectionItem {
   status: ItemStatus;
   notes: string;
   notAccessible: boolean;
+  /** Why the item could not be assessed (required when notAccessible). */
+  naReason: string;
   analysis: ItemAnalysisRecord | null;
 }
 
@@ -121,7 +141,8 @@ export interface Photo {
   createdAt: string;
 }
 
-export type FindingSource = "ai" | "inspector";
+/** ai = the AI draft; inspector = added by the inspector; owner = reported by the owner (yearly check). */
+export type FindingSource = "ai" | "inspector" | "owner";
 export type ReviewStatus = "pending" | "confirmed" | "edited" | "rejected";
 
 export interface Finding {
@@ -131,7 +152,13 @@ export interface Finding {
   source: FindingSource;
   title: string;
   description: string;
+  /** TG2/TG3: what causes the deviation (orsök). */
+  cause: string;
+  /** TG2/TG3: what happens if nothing is done (afleiðing). */
+  consequence: string;
   grade: Grade;
+  /** The AI's original grade, kept when the inspector edits (null for non-AI findings). */
+  aiGrade: Grade | null;
   confidence: Confidence;
   photoIds: string[];
   recommendedAction: string;
@@ -164,11 +191,25 @@ export interface InspectionSummaryAI {
   generatedAt: string;
 }
 
+/** A moisture reading taken on site (resistance meter, WME %). See src/lib/standard.ts for the scale. */
+export interface MoistureReading {
+  id: string;
+  inspectionId: string;
+  /** Checklist item the reading belongs to, if any. */
+  itemKey: string | null;
+  room: string;
+  part: string;
+  value: number;
+  method: "pin" | "pinless";
+  createdAt: string;
+}
+
 export interface InspectionBundle {
   inspection: Inspection;
   items: InspectionItem[];
   photos: Photo[];
   findings: Finding[];
+  moisture: MoistureReading[];
 }
 
 // ---------------------------------------------------------------- remedies & negotiation
@@ -225,5 +266,45 @@ export interface Remedy {
   sellerComment: string;
   fixStatus: FixStatus;
   fixVerdict: FixVerdict | null;
+  updatedAt: string;
+}
+
+// ---------------------------------------------------------------- yearly check (property history)
+
+/** The owner's answer about a finding from an earlier report. */
+export const FOLLOWUP_ANSWERS = ["fixed", "unchanged", "worse"] as const;
+export type FollowUpAnswer = (typeof FOLLOWUP_ANSWERS)[number];
+
+/** What the photo comparison concluded (before = the earlier report's photos, after = the owner's new photos). */
+export const FOLLOWUP_VERDICTS = ["fixed", "partially_fixed", "unchanged", "worse", "cannot_tell"] as const;
+export type FollowUpVerdictValue = (typeof FOLLOWUP_VERDICTS)[number];
+
+export interface FollowUpVerdict {
+  engine: "claude" | "mock";
+  model: string;
+  verdict: FollowUpVerdictValue;
+  explanation: string;
+  retakeRequests: { photoNumber: number | null; reason: string }[];
+  checkedAt: string;
+}
+
+export interface FollowUpRecord {
+  inspectionId: string;
+  findingId: string;
+  position: number;
+  answer: FollowUpAnswer | null;
+  note: string;
+  verdict: FollowUpVerdict | null;
+  updatedAt: string;
+}
+
+export const QUESTION_ANSWERS = ["yes", "no", "unknown"] as const;
+export type QuestionAnswer = (typeof QUESTION_ANSWERS)[number];
+
+export interface AnnualAnswer {
+  inspectionId: string;
+  questionId: string;
+  answer: QuestionAnswer | null;
+  note: string;
   updatedAt: string;
 }

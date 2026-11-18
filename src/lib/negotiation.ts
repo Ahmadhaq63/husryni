@@ -102,6 +102,48 @@ export function computeTotals(findings: Finding[], remedies: Map<string, Remedy>
 
 export const pctOf = (part: number, whole: number | null) => (whole ? (part / whole) * 100 : null);
 
+/** Share of the estimated cost of serious (TG3) repairs that the seller won't fix, held back as a risk buffer. */
+export const OFFER_RISK_BUFFER = 0.2;
+
+export interface OfferGuide {
+  asking: number;
+  reductions: number;
+  hoaShare: number;
+  buffer: number;
+  offer: number;
+  belowPct: number;
+}
+
+/**
+ * A suggested offer for a buyer: the asking price minus the price reductions they ask for, their share of
+ * common-property repairs, and a risk buffer on serious (TG3) repairs that the seller won't fix before handover
+ * (their scope is usually uncertain). Rounded down to 100,000 kr. An aid for the offer, not a valuation.
+ */
+export function offerGuide(
+  priceIsk: number,
+  findings: Finding[],
+  remedies: Map<string, Remedy>,
+  totals: NegotiationTotals,
+  ownerSharePct: number | null = null,
+): OfferGuide {
+  // Common-property repairs fall on the buyer only in proportion to their share, so does the risk on them.
+  const share = ownerSharePct != null ? Math.min(Math.max(ownerSharePct, 0), 100) / 100 : 1;
+  const uncertain = findings
+    .filter((f) => f.grade === "TG3" && remedies.get(f.id)?.action !== "seller_fix")
+    .reduce((sum, f) => sum + estimateIsk(f) * (remedies.get(f.id)?.action === "hoa" ? share : 1), 0);
+  const buffer = roundTo(uncertain * OFFER_RISK_BUFFER, 10_000);
+  const raw = priceIsk - totals.priceReduction - totals.hoaBuyerShare - buffer;
+  const offer = Math.max(0, Math.floor(raw / 100_000) * 100_000);
+  return {
+    asking: priceIsk,
+    reductions: totals.priceReduction,
+    hoaShare: totals.hoaBuyerShare,
+    buffer,
+    offer,
+    belowPct: priceIsk ? ((priceIsk - offer) / priceIsk) * 100 : 0,
+  };
+}
+
 /**
  * Reference points shown next to the totals. Information, not legal advice.
  * Sources: docs/business-plan.md [I25]–[I28].
@@ -117,5 +159,5 @@ export const LEGAL_REFERENCE: { proposal2pct: L10n; caseLaw: L10n } = {
   },
 };
 
-/** The negotiation is only available once the report itself is final. */
-export const negotiationOpen = (status: string) => status === "ai_report" || status === "verified";
+/** The negotiation is only available once the report itself is final (and never on a yearly owner check). */
+export const negotiationOpen = (status: string, kind: string = "full") => kind === "full" && (status === "ai_report" || status === "verified");

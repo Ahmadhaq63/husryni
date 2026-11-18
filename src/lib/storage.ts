@@ -42,6 +42,13 @@ export async function readPhotoFile(inspectionId: string, photoId: string, mime:
   return fs.readFile(photoPath(inspectionId, photoId, mime));
 }
 
+/** Size and last-modified time of a stored photo (cheap; used to cache its hash). */
+export async function photoFileStat(inspectionId: string, photoId: string, mime: string): Promise<{ size: number; mtimeMs: number }> {
+  if (!isAllowedImageType(mime)) throw new Error("unsupported type");
+  const st = await fs.stat(photoPath(inspectionId, photoId, mime));
+  return { size: st.size, mtimeMs: st.mtimeMs };
+}
+
 export async function deletePhotoFile(inspectionId: string, photoId: string, mime: string) {
   if (!isAllowedImageType(mime)) return;
   await fs.rm(photoPath(inspectionId, photoId, mime), { force: true });

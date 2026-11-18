@@ -15,6 +15,8 @@ const base: ItemAnalysis = {
     {
       title: " Móða milli glerja ",
       description: "x",
+      cause: " Lokun glersins hefur gefið sig. ",
+      consequence: "Móðan verður varanleg.",
       grade: "TG2",
       confidence: "high",
       photo_numbers: [2, 2, 5, 0],
@@ -32,6 +34,28 @@ describe("AI output mapping", () => {
     expect(f.photoIds).toEqual(["b"]);
     expect(f.title).toBe("Móða milli glerja");
     expect(f.costKey).toBe("window_glass_unit");
+  });
+
+  it("keeps cause and consequence on TG2/TG3 and drops them below", () => {
+    const [f] = toNewFindings(base, ["a"]);
+    expect(f.cause).toBe("Lokun glersins hefur gefið sig.");
+    expect(f.consequence).toBe("Móðan verður varanleg.");
+    const minor = { ...base, findings: [{ ...base.findings[0], grade: "TG1" as const }] };
+    expect(toNewFindings(minor, ["a"])[0]).toMatchObject({ cause: "", consequence: "" });
+  });
+
+  it("demo analyser gives every TG2/TG3 sample a cause and a consequence", () => {
+    for (const t of ITEM_TEMPLATES) {
+      for (const lang of ["is", "en"] as const) {
+        for (const f of mockAnalyzeItem(t, 3, lang).findings) {
+          if (f.grade === "TG2" || f.grade === "TG3") expect(f.cause && f.consequence, `${t.key}/${lang}`).toBeTruthy();
+        }
+      }
+    }
+  });
+
+  it("system prompt asks for cause and consequence on TG2/TG3", () => {
+    expect(ITEM_SYSTEM_PROMPT).toMatch(/Cause and consequence \(required for TG2 and TG3\)/);
   });
 
   it("falls back to 'none' for unknown cost keys", () => {

@@ -11,7 +11,7 @@ type Err = { error: Response };
 export function loadForBuyer(inspectionId: string): Err | { bundle: InspectionBundle } {
   const bundle = getBundle(inspectionId);
   if (!bundle) return { error: fail(404, NOT_FOUND) };
-  if (!negotiationOpen(bundle.inspection.status)) return { error: fail(409, LOCKED) };
+  if (!negotiationOpen(bundle.inspection.status, bundle.inspection.kind)) return { error: fail(409, LOCKED) };
   return { bundle };
 }
 
@@ -27,7 +27,7 @@ export function loadForSeller(
   const negotiation = getNegotiationByToken(token);
   if (!negotiation) return { error: fail(404, NOT_FOUND) };
   const bundle = getBundle(negotiation.inspectionId);
-  if (!bundle || !negotiationOpen(bundle.inspection.status)) return { error: fail(404, NOT_FOUND) };
+  if (!bundle || !negotiationOpen(bundle.inspection.status, bundle.inspection.kind)) return { error: fail(404, NOT_FOUND) };
   if (!findingId) return { negotiation, bundle, finding: null, remedy: null };
   const finding = negotiableFinding(bundle, findingId);
   const remedy = finding ? getRemedy(finding.id) : null;
