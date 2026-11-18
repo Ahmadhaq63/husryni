@@ -27,12 +27,20 @@ async function readRegister(): Promise<{ csv: string; source: string; published:
     const file = path.resolve(fileArg);
     return { csv: fs.readFileSync(file, "utf8"), source: file, published: fs.statSync(file).mtime.toISOString() };
   }
-  console.log(`Downloading the address register from HMS …`);
-  const res = await fetch(REGISTER_URL);
-  if (!res.ok) throw new Error(`HMS answered ${res.status} ${res.statusText} for ${REGISTER_URL}`);
-  const csv = await res.text();
-  const lastModified = res.headers.get("last-modified");
-  return { csv, source: REGISTER_URL, published: lastModified ? new Date(lastModified).toISOString() : "" };
+  // A stalled download must not hold up a deploy: give up after 5 minutes (it normally takes seconds to 2 minutes).
+  const timeoutMs = Number(process.env.ADDRESS_DOWNLOAD_TIMEOUT_MS) || 5 * 60_000;
+  console.log(`Downloading the address register from HMS (gives up after ${Math.round(timeoutMs / 1000)} s) …`);
+  try {
+    const res = await fetch(REGISTER_URL, { signal: AbortSignal.timeout(timeoutMs) });
+    if (!res.ok) throw new Error(`HMS answered ${res.status} ${res.statusText}`);
+    const csv = await res.text();
+    const lastModified = res.headers.get("last-modified");
+    return { csv, source: REGISTER_URL, published: lastModified ? new Date(lastModified).toISOString() : "" };
+  } catch (e) {
+    const reason = e instanceof Error && e.name === "TimeoutError" ? `no complete answer within ${Math.round(timeoutMs / 1000)} s` : String(e);
+    console.error(`Could not download the address register (${reason}). The app works without address suggestions.`);
+    process.exit(1);
+  }
 }
 
 const started = Date.now();
