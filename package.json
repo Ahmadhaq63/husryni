@@ -1,0 +1,37 @@
+{
+  "name": "husryni",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI-assisted home condition reports for the Icelandic property market (prototype).",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.9.0",
+    "better-sqlite3": "^13.2.0",
+    "bootstrap": "^5.3.9",
+    "bootstrap-icons": "^1.13.2",
+    "next": "16.4.6",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "server-only": "^0.0.1",
+    "three": "^0.187.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^22.20.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@types/three": "^0.187.0",
+    "typescript": "~6.0.3",
+    "vitest": "^5.1.0"
+  },
+  "engines": {
+    "node": ">=22.12"
+  }
+}
