@@ -82,6 +82,9 @@ export function anchorForKey(key: string): Vec3 | null {
  * Resolves anchors for a list of keys. Keys sharing a point are spread on a small ring around it
  * so their pins never sit exactly on top of each other.
  */
+/** True when the item has a place on the 3D house (some, like documents, are only listed). */
+export const hasAnchor = (key: string) => anchorForKey(key) !== null;
+
 export function resolveAnchors(keys: string[]): Map<string, Vec3> {
   const groups = new Map<string, string[]>();
   const base = new Map<string, Vec3>();

@@ -539,3 +539,379 @@
     line-height: 1.4;
   }
 }
+
+/* =========================================================================
+   Drone camera on the condition map (ConditionMapScene): fly-to card, tour,
+   viewfinder corners, focus ring. Calm, glassy overlays on the 3D stage.
+   ========================================================================= */
+.cmap-stage {
+  --hud: rgba(15, 92, 77, 0.5);
+}
+.cmap-hud {
+  position: absolute;
+  inset: 14px;
+  z-index: 5;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.35s ease;
+  background:
+    linear-gradient(var(--hud) 0 0) top left / 26px 2px no-repeat,
+    linear-gradient(var(--hud) 0 0) top left / 2px 26px no-repeat,
+    linear-gradient(var(--hud) 0 0) top right / 26px 2px no-repeat,
+    linear-gradient(var(--hud) 0 0) top right / 2px 26px no-repeat,
+    linear-gradient(var(--hud) 0 0) bottom left / 26px 2px no-repeat,
+    linear-gradient(var(--hud) 0 0) bottom left / 2px 26px no-repeat,
+    linear-gradient(var(--hud) 0 0) bottom right / 26px 2px no-repeat,
+    linear-gradient(var(--hud) 0 0) bottom right / 2px 26px no-repeat;
+}
+.cmap-stage.is-drone .cmap-hud {
+  opacity: 1;
+}
+.cmap-stage .cmap-pin {
+  transition: opacity 0.3s ease;
+}
+.cmap-stage.is-drone .cmap-pin:not(.is-focus):not(:hover):not(:focus-visible) {
+  opacity: 0.4;
+}
+.cmap-pin.is-focus::after {
+  content: "";
+  position: absolute;
+  inset: -9px;
+  border: 2px solid var(--pin);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: cmap-ping 1.8s cubic-bezier(0.2, 0.7, 0.3, 1) infinite;
+}
+@keyframes cmap-ping {
+  0% {
+    transform: scale(0.75);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+
+.cmap-controls {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 130;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+.cmap-ctl {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.85rem;
+  border: 1px solid rgba(15, 92, 77, 0.16);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.88);
+  color: var(--brand-900);
+  font-size: 0.82rem;
+  font-weight: 650;
+  box-shadow: 0 4px 16px rgba(7, 46, 39, 0.1);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: background 0.2s, color 0.2s, transform 0.2s;
+}
+.cmap-ctl:hover {
+  background: #fff;
+  transform: translateY(-1px);
+}
+.cmap-ctl.is-on {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+}
+.cmap-ctl:focus-visible,
+.cmap-card-btn:focus-visible,
+.cmap-item-fly:focus-visible {
+  outline: 3px solid rgba(15, 92, 77, 0.35);
+  outline-offset: 2px;
+}
+.cmap-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  z-index: 6;
+  margin: 0;
+  padding: 0.3rem 0.8rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--muted);
+  font-size: 0.78rem;
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+.cmap-card {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  z-index: 130;
+  width: min(370px, calc(100% - 32px));
+  padding: 0.9rem 1rem 0.85rem;
+  border: 1px solid rgba(15, 92, 77, 0.14);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 18px 44px rgba(7, 46, 39, 0.18);
+  backdrop-filter: blur(12px) saturate(1.2);
+  -webkit-backdrop-filter: blur(12px) saturate(1.2);
+  opacity: 0;
+  transform: translateY(10px);
+  pointer-events: none;
+  transition: opacity 0.3s ease, transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.cmap-card.is-open {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+.cmap-card-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.25rem 0.75rem;
+}
+.cmap-card-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--brand);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+.cmap-card-step {
+  color: var(--muted);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+.cmap-card-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  font-weight: 650;
+  color: var(--ink);
+}
+.cmap-card-title {
+  margin: 0.35rem 0 0.4rem;
+  font-size: 1.08rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.cmap-card-findings {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0 0 0.7rem;
+  padding: 0;
+  list-style: none;
+  font-size: 0.86rem;
+  line-height: 1.4;
+}
+.cmap-card-findings li {
+  display: flex;
+  gap: 0.45rem;
+  align-items: flex-start;
+}
+.cmap-card-grade {
+  flex: none;
+  margin-top: 0.05rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+.cmap-card-none {
+  margin: 0 0 0.7rem;
+  font-size: 0.86rem;
+  color: var(--muted);
+}
+.cmap-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.cmap-card-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-height: 34px;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.cmap-card-btn:hover {
+  border-color: var(--brand);
+}
+.cmap-card-btn.is-primary {
+  border-color: var(--brand);
+  background: var(--brand);
+  color: #fff;
+}
+.cmap-card-btn.is-primary:hover {
+  background: var(--brand-700);
+}
+.cmap-item-fly {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.cmap-item-fly:hover {
+  color: var(--brand);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+@media (max-width: 575.98px) {
+  .cmap-hint {
+    display: none;
+  }
+  .cmap-controls {
+    top: 10px;
+    right: 10px;
+  }
+  .cmap-card {
+    left: 10px;
+    right: 10px;
+    bottom: 10px;
+    width: auto;
+    padding: 0.75rem 0.85rem;
+  }
+  .cmap-card-findings li:nth-child(n + 3) {
+    display: none;
+  }
+}
+@media print {
+  .cmap-controls,
+  .cmap-card,
+  .cmap-hud,
+  .cmap-hint {
+    display: none !important;
+  }
+}
+
+/* Landing hero: labels that fly the drone to a close-up, with a caption card. */
+.three-hero-stage.is-interactive .three-hero-label {
+  pointer-events: auto;
+  cursor: pointer;
+  border: 1px solid transparent;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  transition:
+    opacity 0.3s ease,
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease;
+}
+.three-hero-stage.is-interactive .three-hero-label:hover {
+  box-shadow: 0 6px 18px rgba(13, 38, 33, 0.18);
+}
+.three-hero-stage.is-interactive .three-hero-label:focus-visible {
+  outline: 3px solid rgba(15, 92, 77, 0.35);
+  outline-offset: 2px;
+}
+.three-hero-stage.is-drone .three-hero-label:not(.is-focus) {
+  opacity: 0.35 !important;
+}
+.three-hero-label.is-focus {
+  border-color: var(--brand);
+  background: var(--brand);
+  color: #fff;
+}
+.three-hero-card {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  z-index: 20;
+  width: min(330px, calc(100% - 24px));
+  padding: 0.85rem 0.95rem 0.8rem;
+  border: 1px solid rgba(15, 92, 77, 0.14);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 18px 44px rgba(7, 46, 39, 0.18);
+  backdrop-filter: blur(12px) saturate(1.2);
+  -webkit-backdrop-filter: blur(12px) saturate(1.2);
+  opacity: 0;
+  transform: translateY(10px);
+  pointer-events: none;
+  transition:
+    opacity 0.3s ease,
+    transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.three-hero-card.is-open {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+.three-hero-card-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--brand);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+.three-hero-card-title {
+  margin: 0.3rem 0 0.25rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+.three-hero-card-text {
+  margin: 0 0 0.65rem;
+  font-size: 0.86rem;
+  line-height: 1.45;
+  color: var(--text);
+}
+.three-hero-card-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.75rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.three-hero-card-back:hover {
+  border-color: var(--brand);
+}
+.three-hero-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 6px;
+  margin: 0;
+  padding: 0.25rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.8);
+  color: var(--muted);
+  font-size: 0.75rem;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  pointer-events: none;
+}

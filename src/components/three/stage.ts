@@ -200,7 +200,8 @@ export function createStage(opts: StageOptions): Stage | null {
     last = now;
     elapsed += dt;
     const animating = opts.onFrame(dt, elapsed);
-    const moving = controls.update();
+    // While a camera flight runs the controls are off: the flight owns the camera (roll included).
+    const moving = controls.enabled ? controls.update() : false;
     renderer.render(scene, camera);
     rendered = true;
     opts.afterRender();

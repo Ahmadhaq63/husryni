@@ -18,7 +18,9 @@ import {
   type SegPart,
 } from "@/components/report/ui";
 import { MoistureSection, OverallGrade, SealBlock, SystemsGrid } from "@/components/report/standardViews";
-import { ConditionMap3D, type ConditionItemState } from "@/components/three";
+import FlyToButton from "@/components/report/FlyToButton";
+import { ConditionMap3D, type ConditionItemState, type DroneUi } from "@/components/three";
+import { hasAnchor } from "@/components/three/anchors";
 import { AREA_LABEL, getTemplate, type Area } from "@/lib/checklist";
 import { COST_TABLE_VERIFIED, formatIsk, getCost } from "@/lib/costs";
 import { GRADE_COLOR, STATE_COLOR } from "@/lib/gradeColors";
@@ -149,6 +151,19 @@ export default function ReportView({
   ];
 
   const verifyHref = inspection.reportHash ? `${origin}/verify?code=${shortFingerprint(inspection.reportHash)}` : "";
+  const droneUi: DroneUi = {
+    view: t.drnView,
+    tour: t.drnTour,
+    stop: t.drnStop,
+    home: t.drnHome,
+    prev: t.drnPrev,
+    next: t.drnNext,
+    inReport: t.drnInReport,
+    none: t.drnNone,
+    step: t.drnStep,
+    hint: t.drnHint,
+  };
+  const overallShown = verified && inspection.overallGrade ? inspection.overallGrade : r.overall.grade;
 
   const stage = inspection.constructionStage ?? "unknown";
   const stageNote = STAGE_NOTE[stage];
@@ -204,6 +219,33 @@ export default function ReportView({
               <div>{t.demoBanner}</div>
             </div>
           )}
+
+          <section className="rp-drone no-print" aria-labelledby="rp-map">
+            <div className="rp-drone__head">
+              <div className="rp-drone__intro">
+                <div className="eyebrow rp-drone__eyebrow">
+                  <i className="bi bi-crosshair" aria-hidden /> {t.drnView}
+                </div>
+                <h2 id="rp-map" className="rp-drone__title">
+                  {t.rpMapTitle}
+                </h2>
+                <p className="rp-drone__lead">{t.drnLead}</p>
+              </div>
+              <div className="rp-drone__grade">
+                <span className="rp-drone__label">{t.stdOverall}</span>
+                <GradeBadge grade={overallShown} lang={lang} />
+                <ul className="rp-drone__counts" aria-label={t.gradeOverview}>
+                  {(["TG3", "TG2", "TG1"] as const).map((g) => (
+                    <li key={g} className={r.counts[g] ? undefined : "is-zero"}>
+                      <Swatch color={GRADE_COLOR[g].solid} />
+                      {g} <strong>{r.counts[g]}</strong>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+            <ConditionMap3D items={mapItems} ariaLabel={t.rpMapAria} legend={legend} ui={droneUi} className="rp-drone__map" />
+          </section>
 
           <div className="rp-top">
             <section className="card rp-card" aria-labelledby="rp-property">
@@ -283,7 +325,7 @@ export default function ReportView({
             </div>
           </section>
 
-          <div className="rp-overview">
+          <div className="rp-overview rp-overview--solo">
             <section className="card rp-card rp-overview__summary" aria-labelledby="rp-overview">
               <div className="card-body">
                 <SectionHead id="rp-overview" icon="bi-bar-chart-line" title={t.gradeOverview} />
@@ -331,20 +373,6 @@ export default function ReportView({
               </div>
             </section>
 
-            <section className="card rp-card rp-mapcard no-print" aria-labelledby="rp-map">
-              <div className="card-body">
-                <div className="rp-map-head">
-                  <h2 id="rp-map" className="rp-map-title">
-                    <i className="bi bi-house-door" aria-hidden />
-                    {t.rpMapTitle}
-                  </h2>
-                  <p className="rp-map-hint">{t.rpMapHint}</p>
-                </div>
-                <div className="rp-map">
-                  <ConditionMap3D items={mapItems} ariaLabel={t.rpMapAria} legend={legend} />
-                </div>
-              </div>
-            </section>
           </div>
 
           {inspection.summary && (
@@ -628,6 +656,7 @@ function ItemCard({ row, lang, t }: { row: Row; lang: Lang; t: Dict }) {
           )}
         </div>
         <div className="rp-item__grade">
+          {hasAnchor(key) && <FlyToButton itemKey={key} label={t.drnShow} className="rp-item__fly" />}
           {skipped ? (
             <GradeBadge grade="TGIU" lang={lang} />
           ) : s.worst ? (

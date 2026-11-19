@@ -4,6 +4,8 @@
  * Server- and client-safe (no hooks). Styles: src/styles/standard.css.
  */
 import GradeBadge from "../GradeBadge";
+import { hasAnchor } from "../three/anchors";
+import FlyToButton from "./FlyToButton";
 import { Chip, SectionHead } from "./ui";
 import { formatIsk } from "@/lib/costs";
 import type { Dict } from "@/lib/i18n";
@@ -85,7 +87,7 @@ export function OverallGrade({
 }
 
 /** The ten building systems as traffic lights; the same ten in every report. */
-export function SystemsGrid({ systems, lang, t }: { systems: SystemStatus[]; lang: Lang; t: Dict }) {
+export function SystemsGrid({ systems, lang, t, fly = true }: { systems: SystemStatus[]; lang: Lang; t: Dict; fly?: boolean }) {
   const toneText = TONE_TEXT(t);
   return (
     <div className="std-systems">
@@ -116,6 +118,7 @@ export function SystemsGrid({ systems, lang, t }: { systems: SystemStatus[]; lan
             {s.itemKeys.length > 0 && (
               <p className="std-sys__count">{t.stdSysItems.replace("{a}", String(s.assessed)).replace("{n}", String(s.itemKeys.length))}</p>
             )}
+            {fly && s.focusKey && hasAnchor(s.focusKey) && <FlyToButton itemKey={s.focusKey} label={t.drnShow} className="std-sys__fly" />}
           </li>
         ))}
       </ul>

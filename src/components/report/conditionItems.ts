@@ -19,12 +19,21 @@ export function itemState(item: InspectionItem): ConditionItemState {
  */
 export function conditionMapItems(items: InspectionItem[], findings: Finding[], lang: Lang): ConditionMapItem[] {
   const active = activeFindings(findings);
-  return items.map((item) => ({
-    key: item.itemKey,
-    title: getTemplate(item.itemKey)?.title[lang] ?? item.itemKey,
-    grade: worstGrade(active.filter((f) => f.itemKey === item.itemKey)),
-    state: itemState(item),
-  }));
+  return items.map((item) => {
+    const mine = active.filter((f) => f.itemKey === item.itemKey);
+    return {
+      key: item.itemKey,
+      title: getTemplate(item.itemKey)?.title[lang] ?? item.itemKey,
+      grade: worstGrade(mine),
+      state: itemState(item),
+      // What the drone view shows for this part of the house: its most serious findings.
+      findings: mine
+        .filter((f) => f.grade !== "TG0")
+        .sort((a, b) => GRADE_INFO[b.grade].severity - GRADE_INFO[a.grade].severity)
+        .slice(0, 3)
+        .map((f) => ({ title: f.title, grade: f.grade })),
+    };
+  });
 }
 
 /** Translated legend for the condition map (grades from GRADE_INFO, plus the item states). */

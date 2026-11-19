@@ -76,6 +76,15 @@ export default async function Home() {
                     wetRooms: t.shHeroWetRooms,
                     technical: t.shHeroTechnical,
                   }}
+                  details={{
+                    roof: t.heroRoof,
+                    windows: t.heroWindows,
+                    facade: t.heroFacade,
+                    foundation: t.heroFoundation,
+                    wetRooms: t.heroWetRooms,
+                    technical: t.heroTechnical,
+                  }}
+                  ui={{ back: t.drnHome, explore: t.heroExplore, check: t.heroCheck }}
                 />
               </div>
             </div>
@@ -130,6 +139,34 @@ export default async function Home() {
               </li>
             ))}
           </ol>
+        </div>
+      </section>
+
+      <section id="more" className="sh-section sh-more-wrap">
+        <div className="container">
+          <div className="sh-section-head">
+            <p className="eyebrow">{t.moreEyebrow}</p>
+            <h2 className="sh-h2">{t.moreTitle}</h2>
+            <p className="sh-section-lead">{t.moreLead}</p>
+          </div>
+          <ul className="sh-more">
+            {[
+              { icon: "bi-crosshair", title: t.more1Title, text: t.more1Text },
+              { icon: "bi-shield-lock", title: t.more2Title, text: t.more2Text },
+              { icon: "bi-signpost-split", title: t.more3Title, text: t.more3Text },
+              { icon: "bi-calendar2-check", title: t.more4Title, text: t.more4Text },
+              { icon: "bi-share", title: t.more5Title, text: t.more5Text },
+              { icon: "bi-chat-dots", title: t.more6Title, text: t.more6Text },
+            ].map((f) => (
+              <li className="sh-more-card" key={f.title}>
+                <span className="sh-icon-tile sh-icon-tile-lg" aria-hidden>
+                  <i className={`bi ${f.icon}`} />
+                </span>
+                <h3 className="sh-h3">{f.title}</h3>
+                <p className="sh-more-text">{f.text}</p>
+              </li>
+            ))}
+          </ul>
         </div>
       </section>
 

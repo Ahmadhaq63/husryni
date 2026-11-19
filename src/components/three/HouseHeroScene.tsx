@@ -8,9 +8,10 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { HERO_HOTSPOTS } from "./anchors";
+import { createDrone, type Drone, type Pose } from "./drone";
 import { buildHouse, disposeObject } from "./houseModel";
 import { DECK, H, RIDGE_TOP, VIEW } from "./houseSpec";
-import type { HeroLabelKey } from "./index";
+import type { HeroLabelKey, HeroUi } from "./index";
 import { applyScan, createScanUniforms } from "./scanEffect";
 import { createStage, frameView, housePoints, type Stage } from "./stage";
 import StaticHouse from "./StaticHouse";
@@ -34,7 +35,34 @@ const swingFor = (width: number) => (width < COMPACT ? SWING * 0.6 : SWING);
 
 type Status = "loading" | "ready" | "failed";
 
-export default function HouseHeroScene({ labels }: { labels: Record<HeroLabelKey, string> }) {
+const HOME_POLAR: [number, number] = [THREE.MathUtils.degToRad(52), THREE.MathUtils.degToRad(84)];
+const FOCUS_POLAR: [number, number] = [THREE.MathUtils.degToRad(20), THREE.MathUtils.degToRad(88)];
+
+/** Where the drone parks for a hotspot: out along the surface's normal, a little above, leaning to the overview. */
+function heroFocusPose(at: THREE.Vector3, normal: THREE.Vector3, home: Pose): Pose {
+  const homeDir = home.position.clone().sub(home.target).setY(0).normalize();
+  const dir = normal.clone().setY(0);
+  if (dir.lengthSq() < 0.01) dir.copy(homeDir);
+  dir.normalize().multiplyScalar(0.72).addScaledVector(homeDir, 0.28).normalize();
+  const roof = normal.y > 0.5;
+  // The hero frame is small: stay far enough back that the surroundings still show.
+  const position = at.clone().addScaledVector(dir, roof ? 15 : 12);
+  position.y = Math.max(1.6, at.y + (roof ? 8 : 3.6));
+  return { position, target: at.clone() };
+}
+
+export default function HouseHeroScene({
+  labels,
+  details,
+  ui,
+  ariaLabel,
+}: {
+  labels: Record<HeroLabelKey, string>;
+  /** What we check at each hotspot: when given, labels are buttons that fly the camera there. */
+  details?: Record<HeroLabelKey, string>;
+  ui?: HeroUi;
+  ariaLabel?: string;
+}) {
   const canvasHostRef = useRef<HTMLDivElement>(null);
   const pinEls = useRef<(HTMLSpanElement | null)[]>([]);
   const labelEls = useRef<(HTMLSpanElement | null)[]>([]);
@@ -42,7 +70,13 @@ export default function HouseHeroScene({ labels }: { labels: Record<HeroLabelKey
   const labelSizes = useRef<{ w: number; h: number }[]>([]);
   const invalidateRef = useRef<() => void>(() => {});
   const measureRef = useRef<() => void>(() => {});
+  const flyRef = useRef<(index: number | null) => void>(() => {});
   const [status, setStatus] = useState<Status>("loading");
+  /** The hotspot the drone is at; null = the whole house (swinging gently). */
+  const [focus, setFocus] = useState<number | null>(null);
+  const focusRef = useRef<number | null>(null);
+  focusRef.current = focus;
+  const interactive = !!details;
 
   // Label sizes are measured once per text change, not every frame.
   useLayoutEffect(() => {
@@ -133,6 +167,7 @@ export default function HouseHeroScene({ labels }: { labels: Record<HeroLabelKey
     applyMotionPreference();
 
     let stage: Stage | null = null;
+    let drone: Drone | null = null;
     let first = true;
     let distance = 30;
     let idle = Infinity;
@@ -218,7 +253,8 @@ export default function HouseHeroScene({ labels }: { labels: Record<HeroLabelKey
       polar: [THREE.MathUtils.degToRad(52), THREE.MathUtils.degToRad(84)],
       ground: "#ffffff",
       onResize: () => {
-        frame();
+        // A close-up keeps its place when the window changes size; the overview is re-fitted.
+        if (focusRef.current === null && !drone?.flying()) frame();
         // Label styles depend on the hero's width (container query), so sizes change too.
         measureRef.current();
       },
@@ -231,7 +267,17 @@ export default function HouseHeroScene({ labels }: { labels: Record<HeroLabelKey
         }
       },
       onFrame: (dt, t) => {
-        if (reduced || !stage) return false;
+        if (!stage) return false;
+        // A drone flight, or parked at a hotspot: no swing and no scan, the focused hotspot stays lit.
+        const flying = drone?.update(dt) ?? false;
+        if (flying || focusRef.current !== null) {
+          scan.uScanStrength.value = 0;
+          scanGroup.visible = false;
+          anchors.forEach((_, i) => setLit(i, i === focusRef.current));
+          idle = 0;
+          return flying;
+        }
+        if (reduced) return false;
         const { camera, controls } = stage;
 
         // Gentle swing; after the user drags, wait a moment and glide back onto the path.
@@ -279,6 +325,36 @@ export default function HouseHeroScene({ labels }: { labels: Record<HeroLabelKey
     }
     stage.scene.add(model.group, scanGroup);
     invalidateRef.current = stage.invalidate;
+    drone = createDrone(stage, () => motionQuery.matches);
+    /** The overview the swing starts from, fitted to the canvas (a clone, so the live camera stays put). */
+    const homePose = (): Pose | null => {
+      if (!stage) return null;
+      const cam = stage.camera.clone();
+      const width = Math.max(stage.size.width, 1);
+      const padX = width < COMPACT ? 0.42 : Math.min(0.24, 70 / width + 0.05);
+      const fit = frameView(cam, points, VIEW.azimuth, VIEW.elevation, { x: padX, y: 0.06 }, reduced ? 0 : swingFor(width));
+      return { position: cam.position.clone(), target: fit.target.clone() };
+    };
+    flyRef.current = (index) => {
+      if (!stage || !drone) return;
+      const home = homePose();
+      if (!home) return;
+      if (index === null) {
+        drone.flyTo(home, {
+          hover: false,
+          onArrive: () => {
+            stage!.controls.minPolarAngle = HOME_POLAR[0];
+            stage!.controls.maxPolarAngle = HOME_POLAR[1];
+            phase = 0;
+            idle = 0;
+          },
+        });
+        return;
+      }
+      stage.controls.minPolarAngle = FOCUS_POLAR[0];
+      stage.controls.maxPolarAngle = FOCUS_POLAR[1];
+      drone.flyTo(heroFocusPose(anchors[index].at, anchors[index].normal, home), { hover: true });
+    };
     stage.invalidate();
 
     const onMotionChange = () => {
@@ -291,19 +367,34 @@ export default function HouseHeroScene({ labels }: { labels: Record<HeroLabelKey
 
     return () => {
       motionQuery.removeEventListener("change", onMotionChange);
+      flyRef.current = () => {};
       invalidateRef.current = () => {};
       stage?.dispose();
       stage = null;
     };
   }, []);
 
+  const fly = (index: number | null) => {
+    setFocus(index);
+    flyRef.current(index);
+  };
+
   return (
-    <div className="three-stage three-hero-stage" data-status={status}>
+    <div
+      className={`three-stage three-hero-stage${focus !== null ? " is-drone" : ""}${interactive ? " is-interactive" : ""}`}
+      data-status={status}
+      onKeyDown={(e) => {
+        if (e.key === "Escape" && focus !== null) {
+          e.preventDefault();
+          fly(null);
+        }
+      }}
+    >
       <StaticHouse variant="hero" className="three-fallback" />
-      <div ref={canvasHostRef} className="three-canvas-host" />
+      <div ref={canvasHostRef} className="three-canvas-host" role={ariaLabel ? "img" : undefined} aria-label={ariaLabel} />
       {status !== "failed" && (
-        <div className="three-hero-overlay" aria-hidden="true">
-          <svg className="three-hero-leaders">
+        <div className="three-hero-overlay">
+          <svg className="three-hero-leaders" aria-hidden="true">
             {HERO_HOTSPOTS.map((h, i) => (
               <line
                 key={h.key}
@@ -317,22 +408,56 @@ export default function HouseHeroScene({ labels }: { labels: Record<HeroLabelKey
             <span
               key={h.key}
               className="three-hero-pin"
+              aria-hidden="true"
               ref={(el) => {
                 pinEls.current[i] = el;
               }}
             />
           ))}
-          {HERO_HOTSPOTS.map((h, i) => (
-            <span
-              key={h.key}
-              className="three-hero-label"
-              ref={(el) => {
-                labelEls.current[i] = el;
-              }}
-            >
-              {labels[h.key]}
-            </span>
-          ))}
+          {HERO_HOTSPOTS.map((h, i) =>
+            interactive ? (
+              <button
+                key={h.key}
+                type="button"
+                className={`three-hero-label${focus === i ? " is-focus" : ""}`}
+                aria-pressed={focus === i}
+                ref={(el) => {
+                  labelEls.current[i] = el as unknown as HTMLSpanElement;
+                }}
+                onClick={() => fly(focus === i ? null : i)}
+              >
+                {labels[h.key]}
+              </button>
+            ) : (
+              <span
+                key={h.key}
+                className="three-hero-label"
+                aria-hidden="true"
+                ref={(el) => {
+                  labelEls.current[i] = el;
+                }}
+              >
+                {labels[h.key]}
+              </span>
+            ),
+          )}
+          {interactive && (
+            <section className={`three-hero-card${focus !== null ? " is-open" : ""}`} aria-live="polite">
+              {focus !== null && details && (
+                <>
+                  <span className="three-hero-card-eyebrow">
+                    <i className="bi bi-crosshair" aria-hidden="true" /> {ui?.check ?? "What we check"}
+                  </span>
+                  <h3 className="three-hero-card-title">{labels[HERO_HOTSPOTS[focus].key]}</h3>
+                  <p className="three-hero-card-text">{details[HERO_HOTSPOTS[focus].key]}</p>
+                  <button type="button" className="three-hero-card-back" onClick={() => fly(null)}>
+                    <i className="bi bi-arrows-fullscreen" aria-hidden="true" /> {ui?.back ?? "Whole house"}
+                  </button>
+                </>
+              )}
+            </section>
+          )}
+          {interactive && focus === null && status === "ready" && <p className="three-hero-hint">{ui?.explore ?? "Click a label for a closer look"}</p>}
         </div>
       )}
     </div>

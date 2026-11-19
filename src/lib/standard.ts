@@ -213,6 +213,8 @@ export interface SystemStatus {
   assessed: number;
   notAssessed: number;
   findingTitles: string[];
+  /** The item to show for this system on the 3D house: the most serious one, else the first assessed. */
+  focusKey: string | null;
 }
 
 /** Traffic light per system: red = TG3, amber = TG2, green = assessed without TG2/TG3, grey = nothing assessed. */
@@ -228,6 +230,8 @@ export function systemStatuses(items: SystemItemInput[]): SystemStatus[] {
     const notAssessed = mine.filter((i) => i.skipped).length;
     const tone: SystemTone =
       mine.length === 0 ? "none" : worst === "TG3" ? "red" : worst === "TG2" ? "amber" : assessed > 0 ? "green" : "grey";
+    const live = mine.filter((i) => !i.skipped && (i.analyzed || i.worst !== null));
+    const focus = [...live].sort((a, b) => (b.worst ? GRADE_INFO[b.worst].severity : -2) - (a.worst ? GRADE_INFO[a.worst].severity : -2))[0];
     return {
       system,
       tone,
@@ -236,6 +240,7 @@ export function systemStatuses(items: SystemItemInput[]): SystemStatus[] {
       assessed,
       notAssessed,
       findingTitles: mine.flatMap((i) => i.findingTitles),
+      focusKey: focus?.itemKey ?? null,
     };
   });
 }
